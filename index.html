@@ -659,6 +659,13 @@
                   <button type="button" onclick="document.getElementById('exam-deadline').value=''; examDirty = true;" class="btn-ghost shrink-0">No deadline</button>
                 </div>
               </div>
+              <div class="md:col-span-3">
+                <label class="label" for="exam-start">Scheduled start <span class="normal-case tracking-normal font-semibold text-slate-400">(optional — students see a countdown until this time)</span></label>
+                <div class="flex gap-2">
+                  <input type="datetime-local" id="exam-start" oninput="examDirty = true" class="input" />
+                  <button type="button" onclick="document.getElementById('exam-start').value=''; examDirty = true;" class="btn-ghost shrink-0">Start now</button>
+                </div>
+              </div>
             </div>
 
             <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/50 p-3 sm:p-4 space-y-3">
@@ -1997,19 +2004,34 @@
     }
 
     // ── exam helpers ──
+    function examStartMillis(e) {
+      const value = e && (e.startTimestamp ?? e.scheduledStartTimestamp ?? e.startAt);
+      if (!value) return 0;
+      if (typeof value === 'number') return value > 0 && value < 100000000000 ? value * 1000 : value;
+      if (typeof value.toMillis === 'function') return value.toMillis();
+      if (typeof value.seconds === 'number') return value.seconds * 1000;
+      if (typeof value._seconds === 'number') return value._seconds * 1000;
+      const parsed = Date.parse(value);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }
+
     function examStatus(e) {
       const dl = Number(e.deadlineTimestamp) || 0;
+      const start = examStartMillis(e);
       const now = Date.now();
+      if (dl && dl <= now) return { key: 'closed', label: 'Closed', note: 'Closed ' + fmtDateTime(dl), cls: 'badge-rejected' };
+      if (start > now) return { key: 'upcoming', label: 'Upcoming', note: 'Starts ' + fmtDateTime(start), cls: 'badge-pending' };
       if (!dl) return { key: 'open', label: 'Open', note: 'No deadline', cls: 'badge-approved' };
-      if (dl <= now) return { key: 'closed', label: 'Closed', note: 'Closed ' + fmtDateTime(dl), cls: 'badge-rejected' };
       const soon = dl - now < 24 * 3600 * 1000;
       return { key: soon ? 'soon' : 'open', label: soon ? 'Closing soon' : 'Open', note: 'Closes ' + fmtDateTime(dl), cls: soon ? 'badge-pending' : 'badge-approved' };
     }
 
     function sortedExams() {
       const closed = (e) => examStatus(e).key === 'closed';
+      const upcoming = (e) => examStatus(e).key === 'upcoming';
       const dlKey = (e) => Number(e.deadlineTimestamp) || Number.MAX_SAFE_INTEGER;
       return [...rawExams].sort((a, b) => {
+        if (upcoming(a) !== upcoming(b)) return upcoming(a) ? -1 : 1;
         if (closed(a) !== closed(b)) return closed(a) ? 1 : -1;
         if (closed(a)) return (b.deadlineTimestamp || 0) - (a.deadlineTimestamp || 0);
         return (dlKey(a) - dlKey(b)) || String(a.title || '').localeCompare(String(b.title || ''));
@@ -2541,6 +2563,7 @@
       $id('exam-title').value = src ? (asCopy ? 'Copy of ' + (src.title || '') : (src.title || '')) : '';
       $id('exam-duration').value = src ? (Number(src.durationMinutes) || '') : 60;
       $id('exam-deadline').value = (src && !asCopy) ? toLocalInput(Number(src.deadlineTimestamp) || 0) : '';
+      $id('exam-start').value = (src && !asCopy) ? toLocalInput(examStartMillis(src)) : '';
       $id('exam-instructions').value = (src && typeof src.instructions === 'string' && src.instructions.trim()) ? src.instructions : getDefaultInstructions();
       $id('bulk-text').value = ''; $id('bulk-msg').innerText = '';
       $id('editor-heading').innerText = examDraft.id ? 'Edit Live Exam' : (asCopy ? 'Duplicate Live Exam' : 'Create Live Exam');
@@ -2684,15 +2707,20 @@
       if (!examDraft) return;
       if (examDraft.uploading) return toast('Please wait for the banner upload to finish.', 'info');
       const dlRaw = $id('exam-deadline').value;
+      const startRaw = $id('exam-start').value;
       const m = {
         title: $id('exam-title').value.trim(),
         durRaw: $id('exam-duration').value.trim(),
         duration: Number($id('exam-duration').value),
         dlRaw,
+        startRaw,
+        start: startRaw ? new Date(startRaw).getTime() : 0,
         deadline: dlRaw ? new Date(dlRaw).getTime() : 0
       };
 
       const err = validateExam(m);
+      if (!err && m.startRaw && !Number.isFinite(m.start)) { toast('The scheduled start date is not valid.', 'error', 5000); $id('exam-start').focus(); return; }
+      if (!err && m.start && m.deadline && m.deadline <= m.start) { toast('The deadline must be later than the scheduled start.', 'error', 5000); $id('exam-deadline').focus(); return; }
       if (err) {
         toast(err.msg, 'error', 5000);
         if (err.field) { const f = $id(err.field); f.focus(); f.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
@@ -2712,6 +2740,7 @@
         title: m.title,
         durationMinutes: m.duration,
         deadlineTimestamp: m.deadline || 0,
+        startTimestamp: m.start || 0,
         bannerUrl: safeImgUrl(examDraft.bannerUrl),
         bannerPath: examDraft.bannerUrl ? (examDraft.bannerPath || '') : '',
         instructions: ($id('exam-instructions').value.trim() || getDefaultInstructions()),
