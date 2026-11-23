@@ -1,0 +1,3008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#D97706" />
+  <title>JU FreshHub — Admin & Notification Portal</title>
+  <link rel="icon" href="https://img.icons8.com/color/48/graduation-cap.png" type="image/png" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+Ethiopic:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    // Apply saved theme before paint (prevents flash)
+    (function () {
+      try {
+        const saved = localStorage.getItem('ju_theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (saved === 'dark' || (!saved && prefersDark)) document.documentElement.classList.add('dark');
+      } catch (e) {}
+    })();
+
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans Ethiopic', 'system-ui', 'sans-serif'],
+            display: ['Sora', 'Noto Sans Ethiopic', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#FFFBEB', 100: '#FEF3C7', 200: '#FDE68A', 400: '#FBBF24',
+              500: '#F59E0B', 600: '#D97706', 700: '#B45309', 800: '#92400E', 900: '#451A03',
+              gold: '#F5B83D',
+            }
+          },
+          keyframes: {
+            toastIn: { '0%': { opacity: 0, transform: 'translateY(-8px) scale(.97)' }, '100%': { opacity: 1, transform: 'none' } },
+            floaty: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-6px)' } },
+          },
+          animation: { toastIn: 'toastIn .25s ease-out', floaty: 'floaty 6s ease-in-out infinite' }
+        }
+      }
+    }
+  </script>
+
+  <!-- Firebase v10 Compat SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <style type="text/tailwindcss">
+    @layer components {
+      .card { @apply bg-white/90 dark:bg-slate-900/70 backdrop-blur border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-sm shadow-slate-900/5; }
+      .input { @apply w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition; }
+      .label { @apply block text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5; }
+      .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition active:scale-[.97] disabled:opacity-50 disabled:cursor-not-allowed; }
+      .btn-primary { @apply btn text-white bg-gradient-to-br from-brand-600 to-brand-800 hover:from-brand-500 hover:to-brand-700 shadow-md shadow-brand-600/25; }
+      .btn-ghost { @apply btn bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200; }
+      .btn-ok { @apply btn text-white bg-emerald-600 hover:bg-emerald-500 shadow-sm shadow-emerald-600/25; }
+      .btn-danger { @apply btn bg-rose-100 hover:bg-rose-200 text-rose-700 dark:bg-rose-500/15 dark:hover:bg-rose-500/25 dark:text-rose-300; }
+      .btn-warn { @apply btn bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-500/15 dark:hover:bg-amber-500/25 dark:text-amber-300; }
+      .chip { @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:border-brand-400 transition cursor-pointer select-none; }
+      .chip-active { @apply bg-brand-600 border-brand-600 text-white dark:bg-brand-500 dark:border-brand-500 dark:text-white; }
+      .th { @apply py-3.5 px-4 text-[11px] uppercase font-bold tracking-wider text-slate-500 dark:text-slate-400; }
+      .kbd { @apply inline-flex items-center justify-center min-w-[1.5rem] px-1.5 py-0.5 rounded-md text-[11px] font-mono font-semibold bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300; }
+      .copyable { @apply cursor-pointer hover:text-brand-600 dark:hover:text-brand-400 transition; }
+    }
+  </style>
+
+  <style>
+    body { font-family: 'Inter', 'Noto Sans Ethiopic', sans-serif; }
+    .font-display { font-family: 'Sora', 'Noto Sans Ethiopic', sans-serif; }
+
+    /* Ambient background */
+    .bg-ambient {
+      background:
+        radial-gradient(900px 400px at 10% -10%, rgba(245,158,11,.16), transparent 60%),
+        radial-gradient(700px 400px at 100% 0%, rgba(245,184,61,.12), transparent 60%),
+        #F6F7FB;
+    }
+    .dark .bg-ambient {
+      background:
+        radial-gradient(900px 400px at 10% -10%, rgba(245,158,11,.20), transparent 60%),
+        radial-gradient(700px 400px at 100% 0%, rgba(245,184,61,.08), transparent 60%),
+        #0B1020;
+    }
+
+    /* Status badges */
+    .badge { display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .65rem; border-radius:9999px; font-size:.7rem; font-weight:700; border:1px solid transparent; }
+    .badge-pending  { background:#FEF3C7; color:#92400E; border-color:#FCD34D; }
+    .badge-approved { background:#D1FAE5; color:#065F46; border-color:#6EE7B7; }
+    .badge-rejected { background:#FFE4E6; color:#9F1239; border-color:#FDA4AF; }
+    .badge-unpaid   { background:#F1F5F9; color:#64748B; border-color:#E2E8F0; }
+    .dark .badge-pending  { background:rgba(245,158,11,.15); color:#FCD34D; border-color:rgba(245,158,11,.35); }
+    .dark .badge-approved { background:rgba(16,185,129,.15); color:#6EE7B7; border-color:rgba(16,185,129,.35); }
+    .dark .badge-rejected { background:rgba(244,63,94,.15);  color:#FDA4AF; border-color:rgba(244,63,94,.35); }
+    .dark .badge-unpaid   { background:rgba(148,163,184,.12); color:#94A3B8; border-color:rgba(148,163,184,.25); }
+
+    /* Skeleton shimmer */
+    .skeleton { position:relative; overflow:hidden; background:#E2E8F0; border-radius:.5rem; }
+    .dark .skeleton { background:#1E293B; }
+    .skeleton::after { content:''; position:absolute; inset:0; transform:translateX(-100%);
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent); animation:shimmer 1.4s infinite; }
+    .dark .skeleton::after { background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent); }
+    @keyframes shimmer { 100% { transform:translateX(100%); } }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:10px; height:10px; }
+    ::-webkit-scrollbar-thumb { background:#CBD5E1; border-radius:10px; border:2px solid transparent; background-clip:content-box; }
+    .dark ::-webkit-scrollbar-thumb { background:#334155; background-clip:content-box; }
+
+    /* Table row accent for pending */
+    tr.row-pending { box-shadow: inset 3px 0 0 #F59E0B; }
+
+    /* Desktop tabs: icon-only below 1280px (active tab keeps its label) so five tabs always fit */
+    .tab-btn .tab-label { display:none; }
+    .tab-btn.active .tab-label { display:inline; }
+    @media (min-width:1280px) { .tab-btn .tab-label { display:inline; } }
+    .tab-btn.active { background:#fff; color:#B45309; box-shadow:0 1px 3px rgba(15,23,42,.12); }
+    .dark .tab-btn.active { background:#1E293B; color:#FDE68A; }
+
+    /* Hide sensitive text (email) behind a blur; value stays in the field so sign-in still works */
+    .secret-blur { color: transparent !important; text-shadow: 0 0 9px rgba(100,116,139,.95); user-select: none; -webkit-user-select: none; cursor: default; caret-color: transparent; }
+    .secret-blur::selection { background: transparent; }
+    .dark .secret-blur { text-shadow: 0 0 9px rgba(203,213,225,.9); }
+    .pulse-dot { animation: pulse 1.6s cubic-bezier(.4,0,.6,1) infinite; }
+    @keyframes pulse { 50% { opacity:.35; } }
+
+    @media (max-width: 767px) { main { padding-bottom: 6rem; } }
+    @media print { header, nav, .no-print { display:none !important; } }
+  </style>
+</head>
+<body class="bg-ambient text-slate-800 dark:text-slate-100 min-h-screen antialiased">
+
+  <!-- ደወል ድምፅ (Notification Chime) -->
+  <audio id="notif-sound" preload="auto">
+    <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg">
+  </audio>
+
+  <!-- Toast container -->
+  <div id="toast-root" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 w-[min(92vw,22rem)] pointer-events-none"></div>
+
+  <!-- ======================== LOGIN / AUTH OVERLAY ======================== -->
+  <div id="auth-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gradient-to-br from-brand-900 via-slate-900 to-slate-950 overflow-hidden">
+    <img id="login-bg" class="hidden absolute inset-0 w-full h-full object-cover opacity-40" alt="" />
+    <div class="absolute -top-24 -left-24 w-80 h-80 rounded-full bg-brand-500/30 blur-3xl animate-floaty"></div>
+    <div class="absolute -bottom-24 -right-16 w-80 h-80 rounded-full bg-brand-gold/20 blur-3xl animate-floaty" style="animation-delay:-3s"></div>
+
+    <div class="relative bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl rounded-3xl shadow-2xl max-w-md w-full p-8 border border-white/20 dark:border-slate-700">
+      <div id="login-hero" class="hidden -mx-8 -mt-8 mb-6 h-36 rounded-t-3xl overflow-hidden relative">
+        <img id="login-hero-img" class="w-full h-full object-cover" alt="Jimma University campus" />
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent"></div>
+        <p class="absolute bottom-3 left-5 text-white text-xs font-bold tracking-wide drop-shadow">Welcome To JU Freshhub</p>
+      </div>
+      <div class="flex items-center gap-3 mb-6">
+        <div class="ju-logo-box w-14 h-14 shrink-0 rounded-2xl overflow-hidden bg-gradient-to-br from-brand-600 to-brand-900 flex items-center justify-center text-white font-display font-extrabold text-xl shadow-lg shadow-brand-700/40">
+          <img class="ju-logo-img hidden w-full h-full object-contain p-1" alt="JU logo" />
+          <span class="ju-logo-text">JU</span>
+        </div>
+        <div>
+          <h2 class="text-xl font-display font-bold text-slate-900 dark:text-white">JU FreshHub Admin</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Authorized By: <span class="font-bold text-brand-700 dark:text-brand-200">Wondmagegn Yohannes</span></p>
+        </div>
+      </div>
+
+      <div id="auth-error" class="hidden mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300 text-xs font-semibold leading-relaxed border border-rose-200 dark:border-rose-500/30"></div>
+
+      <form id="login-form" onsubmit="handleAdminLogin(event)" class="space-y-4">
+        <div>
+          <label class="label flex items-center justify-between"><span>Admin Email</span><span class="normal-case tracking-normal font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><i data-lucide="shield-check" class="w-3 h-3"></i></span></label>
+          <div class="relative">
+            <i data-lucide="mail" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="email" id="admin-email" required value="ninjaabi213@gmail.com" readonly autocomplete="off" tabindex="-1" class="input pl-10 secret-blur" title="Admin email is saved and hidden for security" />
+          </div>
+        </div>
+        <div>
+          <label class="label">Password</label>
+          <div class="relative">
+            <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+            <input type="password" id="admin-password" required placeholder="Enter password" class="input pl-10 pr-11" />
+            <button type="button" onclick="togglePasswordVisibility()" class="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200" title="Show / hide password">
+              <i data-lucide="eye" id="pw-eye" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+        <button type="submit" id="login-btn" class="btn-primary w-full py-3 text-sm">
+          <span>Sign In to Dashboard</span>
+        </button>
+
+        <div class="relative flex py-2 items-center">
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+          <span class="flex-shrink mx-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Alpha Tech Ⓒ All Right reserved 2026</span>
+          <div class="flex-grow border-t border-slate-200 dark:border-slate-700"></div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================== MAIN DASHBOARD ======================== -->
+  <div id="app-container" class="hidden min-h-screen flex flex-col">
+    <!-- Navbar -->
+    <header class="bg-white/80 dark:bg-slate-950/70 backdrop-blur-xl border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-30">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="ju-logo-box w-10 h-10 shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-brand-600 to-brand-900 text-white flex items-center justify-center font-display font-extrabold text-base shadow-md shadow-brand-700/30">
+            <img class="ju-logo-img hidden w-full h-full object-contain p-0.5" alt="JU logo" />
+            <span class="ju-logo-text">JU</span>
+          </div>
+          <div class="min-w-0">
+            <h1 class="text-sm sm:text-base font-display font-bold text-slate-900 dark:text-white leading-tight truncate">JU FreshHub Portal</h1>
+            <p class="text-[9px] sm:text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1 sm:gap-1.5">
+              <span class="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-emerald-500 pulse-dot"></span>
+              <span id="sync-status">Connecting…</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs (desktop) -->
+        <nav class="hidden md:flex gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-xl text-xs font-semibold">
+          <button onclick="switchTab('payments')" id="tab-btn-payments" title="Payments" class="tab-btn active px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 flex items-center gap-1.5 transition">
+            <i data-lucide="receipt" class="w-3.5 h-3.5"></i><span class="tab-label">Payments</span>
+            <span id="tab-badge-pending" class="hidden min-w-[1.25rem] text-center px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold">0</span>
+          </button>
+          <button onclick="switchTab('students')" id="tab-btn-students" title="Students" class="tab-btn px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 flex items-center gap-1.5 transition">
+            <i data-lucide="users" class="w-3.5 h-3.5"></i><span class="tab-label">Students</span>
+          </button>
+          <button onclick="switchTab('announcements')" id="tab-btn-announcements" title="Announcements" class="tab-btn px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 flex items-center gap-1.5 transition">
+            <i data-lucide="megaphone" class="w-3.5 h-3.5"></i><span class="tab-label">Announcements</span>
+          </button>
+          <button onclick="switchTab('notifications')" id="tab-btn-notifications" title="Alerts" class="tab-btn px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 flex items-center gap-1.5 transition">
+            <i data-lucide="bell" class="w-3.5 h-3.5"></i><span class="tab-label">Alerts</span>
+          </button>
+          <button onclick="switchTab('exams')" id="tab-btn-exams" title="Mock Exams" class="tab-btn px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 flex items-center gap-1.5 transition">
+            <i data-lucide="clipboard-check" class="w-3.5 h-3.5"></i><span class="tab-label">Mock Exams</span>
+          </button>
+        </nav>
+
+        <div class="flex items-center gap-1.5">
+          <span id="admin-user-display" class="secret-blur hidden 2xl:inline text-xs font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-900 px-2.5 py-1.5 rounded-lg"></span>
+
+          <button onclick="requestNotificationPermission()" id="push-perm-btn" class="btn-ghost !px-2.5" title="Enable browser alerts">
+            <i data-lucide="bell-ring" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i>
+            <span class="hidden lg:inline">Enable Phone Alerts</span>
+          </button>
+
+          <button onclick="toggleMute()" id="mute-btn" class="btn-ghost !px-2.5" title="Mute / unmute alert sound">
+            <i data-lucide="volume-2" id="mute-icon" class="w-4 h-4"></i>
+          </button>
+
+          <button onclick="toggleTheme()" class="btn-ghost !px-2.5" title="Toggle dark mode (D)">
+            <i data-lucide="moon" id="theme-icon" class="w-4 h-4"></i>
+          </button>
+
+          <button onclick="openShortcuts()" class="btn-ghost !px-2.5 hidden sm:inline-flex" title="Keyboard shortcuts (?)">
+            <i data-lucide="keyboard" class="w-4 h-4"></i>
+          </button>
+
+          <button onclick="handleSignOut()" title="Sign Out" class="btn-ghost !px-2.5 hover:!text-rose-600">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Mobile bottom nav -->
+    <nav class="md:hidden fixed bottom-3 left-3 right-3 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl shadow-slate-900/10 grid grid-cols-5 p-1.5 text-[11px] font-semibold">
+      <button onclick="switchTab('payments')" id="mob-tab-payments" class="relative flex flex-col items-center gap-0.5 py-2 rounded-xl text-slate-500">
+        <i data-lucide="receipt" class="w-5 h-5"></i><span>Payments</span>
+        <span id="mob-badge-pending" class="hidden absolute top-1 right-4 min-w-[1.1rem] text-center px-1 rounded-full bg-amber-500 text-white text-[9px] font-extrabold">0</span>
+      </button>
+      <button onclick="switchTab('students')" id="mob-tab-students" class="flex flex-col items-center gap-0.5 py-2 rounded-xl text-slate-500">
+        <i data-lucide="users" class="w-5 h-5"></i><span>Students</span>
+      </button>
+      <button onclick="switchTab('announcements')" id="mob-tab-announcements" class="flex flex-col items-center gap-0.5 py-2 rounded-xl text-slate-500">
+        <i data-lucide="megaphone" class="w-5 h-5"></i><span>Notices</span>
+      </button>
+      <button onclick="switchTab('notifications')" id="mob-tab-notifications" class="flex flex-col items-center gap-0.5 py-2 rounded-xl text-slate-500">
+        <i data-lucide="bell" class="w-5 h-5"></i><span>Alerts</span>
+      </button>
+      <button onclick="switchTab('exams')" id="mob-tab-exams" class="flex flex-col items-center gap-0.5 py-2 rounded-xl text-slate-500">
+        <i data-lucide="clipboard-check" class="w-5 h-5"></i><span>Exams</span>
+      </button>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+      <!-- Campus banner (shows once an image is set) -->
+      <section id="dash-hero" class="hidden relative h-32 sm:h-44 rounded-3xl overflow-hidden shadow-lg shadow-slate-900/10">
+        <img id="dash-hero-img" class="w-full h-full object-cover" alt="Jimma University campus" />
+        <div class="absolute inset-0 bg-gradient-to-r from-brand-900/80 via-brand-900/30 to-transparent"></div>
+        <div class="absolute inset-0 p-5 sm:p-7 flex flex-col justify-end text-white">
+          <p class="text-[11px] font-bold uppercase tracking-widest text-brand-200">Jimma University</p>
+          <p class="font-display text-xl sm:text-2xl font-extrabold">JU FreshHub</p>
+        </div>
+      </section>
+
+      <!-- Greeting -->
+      <section class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+        <div>
+          <h2 id="greeting" class="text-xl sm:text-2xl font-display font-bold text-slate-900 dark:text-white">Welcome back 👋</h2>
+          <p id="greeting-sub" class="text-sm text-slate-500 dark:text-slate-400">Here's what's happening on JU FreshHub right now.</p>
+        </div>
+        <div class="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 sm:gap-2">
+          <i data-lucide="calendar" class="w-3 h-3 sm:w-3.5 sm:h-3.5"></i>
+          <span id="live-clock"></span>
+        </div>
+      </section>
+
+      <!-- Metrics Bar -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div class="card p-4 sm:p-5 relative overflow-hidden">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Students</p>
+              <p id="metric-total-students" class="text-2xl sm:text-3xl font-display font-extrabold text-slate-900 dark:text-white mt-1">0</p>
+              <p class="text-[11px] mt-1 font-semibold text-brand-600 dark:text-brand-400"><span id="metric-new-today">0</span> new today</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-400 flex items-center justify-center"><i data-lucide="users" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+
+        <div class="card p-4 sm:p-5 relative overflow-hidden">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pro Unlocked</p>
+              <p id="metric-pro-users" class="text-2xl sm:text-3xl font-display font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">0</p>
+              <p class="text-[11px] mt-1 font-semibold text-slate-500 dark:text-slate-400"><span id="metric-conversion">0%</span> conversion</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center"><i data-lucide="shield-check" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+
+        <div class="card p-4 sm:p-5 relative overflow-hidden">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pending Review</p>
+              <p id="metric-pending-payments" class="text-2xl sm:text-3xl font-display font-extrabold text-amber-600 dark:text-amber-400 mt-1">0</p>
+              <p class="text-[11px] mt-1 font-semibold text-slate-500 dark:text-slate-400">needs your attention</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center"><i data-lucide="clock" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+
+        <div class="card p-4 sm:p-5 relative overflow-hidden bg-gradient-to-br from-brand-600 to-brand-900 !border-0 text-white">
+          <div class="flex items-start justify-between">
+            <div>
+              <p class="text-[11px] font-bold text-brand-200 uppercase tracking-wider">Total Revenue</p>
+              <p id="metric-total-revenue" class="text-2xl sm:text-3xl font-display font-extrabold mt-1">0 ETB</p>
+              <p class="text-[11px] mt-1 font-semibold text-brand-200">199 ETB × Pro users</p>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center"><i data-lucide="wallet" class="w-5 h-5"></i></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================== TAB 1: PAYMENTS & RECEIPTS ======================== -->
+      <section id="view-payments" class="space-y-4">
+        <div class="card p-3 sm:p-4 space-y-3">
+          <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="payment-search" oninput="renderPayments()" placeholder="Search by student name, email, account, or TxRef…   ( / )"
+                     class="input pl-10" />
+            </div>
+            <button onclick="exportPaymentsCSV()" class="btn-ghost shrink-0"><i data-lucide="download" class="w-4 h-4"></i><span>Export CSV</span></button>
+          </div>
+
+          <!-- Status chips (drive the hidden select below) -->
+          <div id="payment-chips" class="flex flex-wrap gap-2"></div>
+          <select id="payment-filter" onchange="renderPayments()" class="hidden">
+            <option value="ALL">All Receipts</option>
+            <option value="PENDING_VERIFICATION" selected>Pending Review</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+          </select>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th class="th">Student</th>
+                  <th class="th">Method & Account</th>
+                  <th class="th">Tx Reference</th>
+                  <th class="th">Amount</th>
+                  <th class="th">Proof</th>
+                  <th class="th">Status</th>
+                  <th class="th text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="payments-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr><td colspan="7" class="p-4"><div class="space-y-3"><div class="skeleton h-10"></div><div class="skeleton h-10"></div><div class="skeleton h-10"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================== TAB 2: STUDENT DIRECTORY ======================== -->
+      <section id="view-students" class="hidden space-y-4">
+        <div class="card p-3 sm:p-4 space-y-3">
+          <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="student-search" oninput="renderStudents()" placeholder="Search students by name, email, or phone…   ( / )"
+                     class="input pl-10" />
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-bold text-slate-500 dark:text-slate-400">Stream</span>
+              <select id="student-stream-filter" onchange="renderStudents()" class="input !w-auto !py-2 text-xs font-semibold">
+                <option value="ALL">All Streams</option>
+                <option value="Natural Science">Natural Science</option>
+                <option value="Social Science">Social Science</option>
+              </select>
+            </div>
+            <button onclick="exportStudentsCSV()" class="btn-ghost shrink-0"><i data-lucide="download" class="w-4 h-4"></i><span>Export CSV</span></button>
+          </div>
+
+          <!-- Stream split bar -->
+          <div>
+            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-sky-500"></span>Natural Science <b id="split-ns" class="text-slate-800 dark:text-slate-100">0</b></span>
+              <span class="flex items-center gap-1.5">Social Science <b id="split-ss" class="text-slate-800 dark:text-slate-100">0</b><span class="w-2 h-2 rounded-full bg-brand-gold"></span></span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+              <div id="split-bar-ns" class="h-full bg-sky-500 transition-all duration-500" style="width:50%"></div>
+              <div id="split-bar-ss" class="h-full bg-brand-gold transition-all duration-500" style="width:50%"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th class="th">Name & Email</th>
+                  <th class="th">Phone Number</th>
+                  <th class="th">Campus & Stream</th>
+                  <th class="th">Payment State</th>
+                  <th class="th">Pro Access</th>
+                  <th class="th text-right">Quick Toggle</th>
+                </tr>
+              </thead>
+              <tbody id="students-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                <tr><td colspan="6" class="p-4"><div class="space-y-3"><div class="skeleton h-10"></div><div class="skeleton h-10"></div><div class="skeleton h-10"></div></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================== TAB 3: ANNOUNCEMENTS ======================== -->
+      <section id="view-announcements" class="hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="card p-5 sm:p-6 space-y-4 h-fit lg:sticky lg:top-24">
+            <h3 class="text-base font-display font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="megaphone" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i>
+              <span>Broadcast Announcement</span>
+            </h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Notices published here appear immediately in all students' mobile apps.</p>
+
+            <!-- Quick templates -->
+            <div>
+              <label class="label">Quick templates</label>
+              <div class="flex flex-wrap gap-1.5">
+                <button type="button" class="chip" onclick="applyTemplate('exam')">📝 Exam</button>
+                <button type="button" class="chip" onclick="applyTemplate('registration')">🎓 Registration</button>
+                <button type="button" class="chip" onclick="applyTemplate('holiday')">🎉 Holiday</button>
+                <button type="button" class="chip" onclick="applyTemplate('maintenance')">🛠 Maintenance</button>
+              </div>
+            </div>
+
+            <form onsubmit="handlePostAnnouncement(event)" class="space-y-4">
+              <div>
+                <label class="label">Title</label>
+                <input type="text" id="ann-title" required placeholder="e.g. Midterm Exam Rooms Released" class="input" />
+              </div>
+
+              <input type="hidden" id="ann-tag" value="Dean's Office" />
+
+              <div>
+                <div class="flex items-center justify-between">
+                  <label class="label">Content</label>
+                  <span id="ann-count" class="text-[10px] font-mono text-slate-400 mb-1.5">0 chars</span>
+                </div>
+                <textarea id="ann-content" required rows="5" oninput="updateAnnCount()" placeholder="Detailed announcement content..." class="input resize-y"></textarea>
+              </div>
+
+              <label class="flex items-center gap-2 cursor-pointer select-none p-3 rounded-xl bg-rose-50/70 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20">
+                <input type="checkbox" id="ann-priority" class="rounded text-rose-600 focus:ring-rose-500 w-4 h-4" />
+                <span class="text-xs font-bold text-rose-700 dark:text-rose-300">🚨 Mark as Urgent / Priority</span>
+              </label>
+
+              <button type="submit" id="ann-submit-btn" class="btn-primary w-full py-2.5 text-sm">
+                <i data-lucide="send" class="w-4 h-4"></i>
+                <span>Publish to App</span>
+              </button>
+            </form>
+          </div>
+
+          <div class="lg:col-span-2 space-y-3">
+            <h3 class="text-base font-display font-bold text-slate-900 dark:text-white flex items-center justify-between">
+              <span>Active Announcements</span>
+              <span id="announcements-count" class="text-xs bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2.5 py-1 rounded-full font-bold">0</span>
+            </h3>
+
+            <div id="announcements-list" class="space-y-3"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================== TAB 4: ALERTS & TELEGRAM BOT ======================== -->
+      <section id="view-notifications" class="hidden space-y-6">
+        <div class="grid grid-cols-1 xl:grid-cols-5 gap-6">
+          <!-- Tips card -->
+          <div class="card p-5 sm:p-6 space-y-4 xl:col-span-5 h-fit">
+            <h3 class="text-base font-display font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <i data-lucide="lightbulb" class="w-4 h-4 text-brand-gold"></i> Pro tips & shortcuts
+            </h3>
+            <ul class="space-y-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              <li class="flex gap-2.5"><i data-lucide="mouse-pointer-click" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span><b>Click any TxRef or phone number</b> to copy it instantly — paste it straight into your Telebirr / CBE app to double-check.</span></li>
+              <li class="flex gap-2.5"><i data-lucide="keyboard" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span>Press <span class="kbd">1</span>–<span class="kbd">5</span> to jump between tabs and <span class="kbd">/</span> to focus search. <span class="kbd">?</span> shows all shortcuts.</span></li>
+              <li class="flex gap-2.5"><i data-lucide="download" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span><b>Export CSV</b> from Payments or Students for backups, Excel reports and accounting.</span></li>
+              <li class="flex gap-2.5"><i data-lucide="tag" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span>The browser tab title shows <b>(N)</b> pending receipts — pin the tab and you'll never miss one.</span></li>
+              <li class="flex gap-2.5"><i data-lucide="volume-x" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span>Working late? Use the <b>speaker button</b> to mute the chime — Telegram alerts still come through.</span></li>
+              <li class="flex gap-2.5"><i data-lucide="smartphone" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span>On Chrome mobile: menu → <b>Add to Home screen</b> for one-tap access to this portal.</span></li>
+              <li class="flex gap-2.5"><i data-lucide="eye" class="w-4 h-4 shrink-0 text-brand-500 mt-0.5"></i><span>Always open <b>View Proof</b> and compare the amount + TxRef with your bank SMS before approving.</span></li>
+            </ul>
+          </div>
+        </div>
+      
+        <div class="card p-5 sm:p-6 space-y-4">
+          <h3 class="text-base font-display font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <i data-lucide="image" class="w-4 h-4 text-brand-600 dark:text-brand-400"></i> Branding & images
+          </h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400">Upload the JU logo and campus photos. Images are resized automatically and saved in this browser. To make them permanent for everyone, paste image links into <code class="font-mono">JU_BRANDING</code> at the top of the script.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="space-y-2">
+              <label class="label">JU logo (login + header)</label>
+              <div class="h-24 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-900">
+                <img id="prev-logo" class="hidden max-h-full object-contain" alt="" /><span id="prev-logo-empty" class="text-xs text-slate-400">No logo yet</span>
+              </div>
+              <div class="flex gap-2">
+                <label class="btn-primary flex-1 cursor-pointer"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Upload<input type="file" accept="image/*" class="hidden" onchange="handleBrandUpload('logo', this)" /></label>
+                <button class="btn-ghost" onclick="resetBrand('logo')">Reset</button>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="label">Login photo</label>
+              <div class="h-24 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-900">
+                <img id="prev-loginPhoto" class="hidden w-full h-full object-cover" alt="" /><span id="prev-loginPhoto-empty" class="text-xs text-slate-400">No photo yet</span>
+              </div>
+              <div class="flex gap-2">
+                <label class="btn-primary flex-1 cursor-pointer"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Upload<input type="file" accept="image/*" class="hidden" onchange="handleBrandUpload('loginPhoto', this)" /></label>
+                <button class="btn-ghost" onclick="resetBrand('loginPhoto')">Reset</button>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="label">Dashboard banner</label>
+              <div class="h-24 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-900">
+                <img id="prev-dashPhoto" class="hidden w-full h-full object-cover" alt="" /><span id="prev-dashPhoto-empty" class="text-xs text-slate-400">No banner yet</span>
+              </div>
+              <div class="flex gap-2">
+                <label class="btn-primary flex-1 cursor-pointer"><i data-lucide="upload" class="w-3.5 h-3.5"></i>Upload<input type="file" accept="image/*" class="hidden" onchange="handleBrandUpload('dashPhoto', this)" /></label>
+                <button class="btn-ghost" onclick="resetBrand('dashPhoto')">Reset</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <!-- ======================== TAB 5: LIVE MOCK EXAMS ======================== -->
+      <section id="view-exams" class="hidden space-y-4">
+
+        <!-- Sub navigation -->
+        <div class="card p-3 sm:p-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+          <div class="flex flex-wrap gap-2">
+            <button id="subtab-exams" onclick="switchExamSub('exams')" class="chip chip-active">
+              <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>Exams
+              <span id="exam-count-badge" class="bg-black/10 dark:bg-white/15 px-1.5 rounded-full text-[10px] font-extrabold">0</span>
+            </button>
+            <button id="subtab-subs" onclick="switchExamSub('subs')" class="chip">
+              <i data-lucide="inbox" class="w-3.5 h-3.5"></i>Submissions
+              <span id="sub-count-badge" class="bg-black/10 dark:bg-white/15 px-1.5 rounded-full text-[10px] font-extrabold">0</span>
+            </button>
+            <button id="subtab-top" onclick="switchExamSub('top')" class="chip">
+              <i data-lucide="trophy" class="w-3.5 h-3.5"></i>Top 10
+            </button>
+          </div>
+          <button id="new-exam-btn" onclick="openExamEditor()" class="btn-primary shrink-0">
+            <i data-lucide="plus" class="w-4 h-4"></i><span>New Live Exam</span>
+          </button>
+        </div>
+
+        <!-- Exam / search filter bar (Submissions + Top 10) -->
+        <div id="exam-filter-bar" class="hidden card p-3 sm:p-4 flex flex-col lg:flex-row gap-3 lg:items-center">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">Exam</span>
+            <select id="exam-filter" onchange="renderExamSubs(); renderTop10();" class="input !py-2 text-xs font-semibold lg:!w-72"></select>
+          </div>
+          <div id="exam-subs-tools" class="flex flex-col sm:flex-row gap-3 lg:flex-1 sm:items-center">
+            <div class="relative flex-1">
+              <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" id="sub-search" oninput="renderExamSubs()" placeholder="Search by student name or email…" class="input pl-10" />
+            </div>
+            <select id="sub-sort" onchange="renderExamSubs()" class="input !w-auto !py-2 text-xs font-semibold">
+              <option value="newest">Newest first</option>
+              <option value="high">Highest score</option>
+              <option value="low">Lowest score</option>
+              <option value="pen">Most penalties</option>
+            </select>
+            <button onclick="exportSubmissionsCSV()" class="btn-ghost shrink-0"><i data-lucide="download" class="w-4 h-4"></i><span>Export CSV</span></button>
+          </div>
+        </div>
+
+        <!-- ───── Panel: exams (list + editor) ───── -->
+        <div id="exam-panel-exams" class="space-y-4">
+
+          <div id="exam-editor" class="hidden card p-4 sm:p-6 space-y-5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 id="editor-heading" class="text-base sm:text-lg font-display font-bold text-slate-900 dark:text-white">Create Live Exam</h3>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Saved to the <code class="font-mono">live_exams</code> collection and visible to students in the app right away.</p>
+              </div>
+              <button onclick="closeExamEditor()" class="btn-ghost !px-2.5" title="Close"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+
+            <div id="exam-editor-warning" class="hidden flex gap-2.5 items-start p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-xs font-semibold text-amber-800 dark:text-amber-300">
+              <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 mt-0.5"></i><span></span>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="md:col-span-3">
+                <label class="label" for="exam-title">Exam title</label>
+                <input type="text" id="exam-title" oninput="examDirty = true" maxlength="200" placeholder="e.g. Freshman Mathematics Midterm Live Mock Exam 2024" class="input" />
+              </div>
+              <div>
+                <label class="label" for="exam-duration">Duration (minutes)</label>
+                <input type="number" id="exam-duration" oninput="examDirty = true" min="1" max="1440" step="1" inputmode="numeric" placeholder="60" class="input" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="label" for="exam-deadline">Deadline <span class="normal-case tracking-normal font-semibold text-slate-400">(optional — exam closes at this time)</span></label>
+                <div class="flex gap-2">
+                  <input type="datetime-local" id="exam-deadline" oninput="examDirty = true" class="input" />
+                  <button type="button" onclick="document.getElementById('exam-deadline').value=''; examDirty = true;" class="btn-ghost shrink-0">No deadline</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/50 p-3 sm:p-4 space-y-3">
+              <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <h5 class="text-sm font-display font-bold text-slate-900 dark:text-white flex items-center gap-1.5"><i data-lucide="image" class="w-4 h-4"></i>Live Mock Exam banner</h5>
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Optional. Uploaded to the public Supabase bucket <code class="font-mono">exam-banners</code>; the public URL is saved on the exam as <code class="font-mono">bannerUrl</code>.</p>
+                </div>
+                <button type="button" onclick="toggleSbSettings()" class="btn-ghost !py-1 !px-2.5 text-[11px]"><i data-lucide="settings-2" class="w-3.5 h-3.5"></i>Storage settings</button>
+              </div>
+
+              <div id="sb-settings" class="hidden rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5 p-3 space-y-2.5">
+                <p class="text-xs text-slate-700 dark:text-slate-300">Supabase is preconfigured for this JU FreshHub installation. You no longer need to enter a project URL or key on each device.</p>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <button type="button" onclick="testSbSettings()" class="btn-ghost !py-1.5 text-xs">Test banner storage</button>
+                  <span id="sb-status" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400"></span>
+                </div>
+                <details class="text-[11px] text-slate-600 dark:text-slate-300">
+                  <summary class="cursor-pointer font-bold">One-time Supabase setup (SQL)</summary>
+                  <p class="mt-1.5">Create a <b>public</b> bucket named <code class="font-mono">exam-banners</code> (Storage → New bucket → Public), then run this in the SQL editor to allow banner uploads:</p>
+                  <pre class="mt-1.5 p-2 rounded-lg bg-slate-900 text-slate-100 overflow-x-auto text-[10.5px] leading-relaxed">create policy "exam-banners upload" on storage.objects
+  for insert to anon, authenticated
+  with check (bucket_id = 'exam-banners');</pre>
+                  <p class="mt-1.5">Public bucket files are readable by anyone through their URL, so no select policy is needed. This simple browser upload policy allows anyone with access to this page to upload into this bucket. For production-grade admin-only uploads, use an authenticated server/Edge Function; do not add a public delete policy.</p>
+                </details>
+              </div>
+
+              <div id="banner-drop" ondragover="event.preventDefault(); this.classList.add('ring-2','ring-brand-400')" ondragleave="this.classList.remove('ring-2','ring-brand-400')" ondrop="onBannerDrop(event)"
+                   class="relative rounded-xl overflow-hidden border-2 border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 min-h-[7rem] flex items-center justify-center">
+                <div id="banner-preview" class="w-full"></div>
+              </div>
+
+              <div id="banner-progress" class="hidden space-y-1">
+                <div class="h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden"><div id="banner-bar" class="h-full w-0 bg-brand-600 transition-all"></div></div>
+                <p id="banner-status" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400"></p>
+              </div>
+
+              <input type="file" id="banner-file" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" onchange="onBannerPicked(this)" />
+              <div class="flex flex-wrap gap-2">
+                <button type="button" id="banner-upload-btn" onclick="pickBanner()" class="btn-primary"><i data-lucide="upload" class="w-4 h-4"></i><span id="banner-upload-label">Upload banner</span></button>
+                <button type="button" id="banner-remove-btn" onclick="removeBanner()" class="btn-danger hidden"><i data-lucide="trash-2" class="w-4 h-4"></i>Remove</button>
+              </div>
+
+              <div id="banner-url-row" class="hidden flex gap-2">
+                <input type="text" id="banner-url" readonly class="input text-[11px] font-mono" onfocus="this.select()" />
+                <button type="button" onclick="copyBannerUrl()" class="btn-ghost shrink-0" title="Copy public URL"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between gap-2 flex-wrap">
+                <label class="label !mb-0" for="exam-instructions">Instructions <span class="normal-case tracking-normal font-semibold text-slate-400">(shown to students before they start — pre-filled for every exam)</span></label>
+                <div class="flex gap-1.5">
+                  <button type="button" onclick="resetInstructions()" class="btn-ghost !py-1 !px-2.5 text-[11px]">Reset to default</button>
+                  <button type="button" onclick="saveInstructionsAsDefault()" class="btn-ghost !py-1 !px-2.5 text-[11px]">Use as my default</button>
+                </div>
+              </div>
+              <textarea id="exam-instructions" rows="6" oninput="examDirty = true" class="input resize-y mt-1.5"></textarea>
+            </div>
+
+            <div class="flex items-center justify-between gap-3 pt-1">
+              <h4 class="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base flex items-center gap-2">
+                Questions <span id="q-count" class="text-[11px] bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-extrabold">0</span>
+              </h4>
+              <div class="flex gap-2"><button type="button" onclick="fixAllSymbols()" class="btn-ghost" title="Convert \\vee, \\sim, \\Rightarrow … to ∨ ~ ⇒"><span class="font-bold">∨ ⇒</span><span class="hidden sm:inline">Fix symbols</span></button><button type="button" onclick="addQuestion()" class="btn-ghost"><i data-lucide="plus" class="w-4 h-4"></i><span>Add question</span></button></div>
+            </div>
+
+            <div class="rounded-2xl border border-brand-200 dark:border-brand-500/30 bg-brand-50/40 dark:bg-brand-500/5 p-3 sm:p-4 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <h5 class="text-sm font-display font-bold text-slate-900 dark:text-white flex items-center gap-1.5"><i data-lucide="clipboard-paste" class="w-4 h-4"></i>Paste many questions at once</h5>
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Copy the whole block (questions + choices) from any source and paste it here. Works with <b>1.</b> / <b>Q1)</b> numbering, choices on one line or wrapped over several lines, <b>- Answer: B</b> / <b>- Explanation: …</b> lines, LaTeX symbols (\vee, \sim, \Rightarrow … are converted to ∨ ~ ⇒),  <b>A.</b> to <b>E.</b> (4 or 5 choices) as <b>A.</b> / <b>A)</b> / <b>(A)</b>, <b>Answer: B</b> lines, an answer key at the end, or a * / ✓ next to the right choice.</p>
+                </div>
+                <button type="button" onclick="toggleBulk()" id="bulk-toggle" class="btn-ghost shrink-0 text-xs">Open</button>
+              </div>
+              <div id="bulk-body" class="hidden space-y-3">
+                <textarea id="bulk-text" rows="12" class="input resize-y font-mono text-xs" placeholder="1. What is the derivative of x^2?&#10;A. x&#10;B. 2x&#10;C. x^2&#10;D. 2&#10;Answer: B&#10;Explanation: d/dx x^n = n x^(n-1)&#10;&#10;2. Capital of Ethiopia?&#10;A) Adama&#10;B) Addis Ababa&#10;C) Hawassa&#10;D) Bahir Dar&#10;&#10;Answers: 2-B"></textarea>
+                <div class="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                  <span id="bulk-msg" class="text-xs font-semibold text-slate-500 dark:text-slate-400"></span>
+                  <div class="flex gap-2 sm:justify-end">
+                    <button type="button" onclick="document.getElementById('bulk-text').value='';document.getElementById('bulk-msg').innerText='';" class="btn-ghost">Clear</button>
+                    <button type="button" onclick="importBulk(false)" class="btn-primary"><i data-lucide="list-plus" class="w-4 h-4"></i><span>Add to exam</span></button>
+                    <button type="button" onclick="importBulk(true)" class="btn-ghost" title="Remove the current questions first">Replace all</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="q-list" class="space-y-4"></div>
+
+            <button type="button" onclick="addQuestion()" class="w-full py-3 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 hover:border-brand-500 hover:text-brand-600 dark:hover:text-brand-400 transition flex items-center justify-center gap-1.5">
+              <i data-lucide="plus-circle" class="w-4 h-4"></i> Add another question
+            </button>
+
+            <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button type="button" onclick="closeExamEditor()" class="btn-ghost py-2.5">Cancel</button>
+              <button type="button" id="exam-save-btn" onclick="saveExam()" class="btn-primary py-2.5 sm:min-w-[11rem]">
+                <i data-lucide="rocket" class="w-4 h-4"></i><span>Save &amp; Publish</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="exam-list" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="card p-5 space-y-3"><div class="skeleton h-5 w-2/3"></div><div class="skeleton h-4 w-1/2"></div><div class="skeleton h-9"></div></div>
+            <div class="card p-5 space-y-3 hidden lg:block"><div class="skeleton h-5 w-2/3"></div><div class="skeleton h-4 w-1/2"></div><div class="skeleton h-9"></div></div>
+          </div>
+        </div>
+
+        <!-- ───── Panel: submissions ───── -->
+        <div id="exam-panel-subs" class="hidden space-y-4">
+          <div id="sub-stats" class="grid grid-cols-2 lg:grid-cols-4 gap-3"></div>
+          <div class="card overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th class="th">Student</th>
+                    <th class="th">Exam</th>
+                    <th class="th">Score</th>
+                    <th class="th">Penalties</th>
+                    <th class="th">Time taken</th>
+                    <th class="th">Submitted</th>
+                    <th class="th text-right">Raw</th>
+                  </tr>
+                </thead>
+                <tbody id="subs-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tr><td colspan="7" class="p-4"><div class="space-y-3"><div class="skeleton h-10"></div><div class="skeleton h-10"></div></div></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ───── Panel: top 10 ───── -->
+        <div id="exam-panel-top" class="hidden space-y-4">
+          <div class="card p-4 sm:p-5">
+            <div class="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 class="font-display font-bold text-slate-900 dark:text-white text-base flex items-center gap-2"><span>🏆</span> Top 10 Scorers</h3>
+                <p id="top-sub" class="text-xs text-slate-500 dark:text-slate-400 mt-0.5"></p>
+              </div>
+              <button onclick="exportTopCSV()" class="btn-ghost shrink-0"><i data-lucide="download" class="w-4 h-4"></i><span>Export</span></button>
+            </div>
+            <div id="top-list" class="space-y-2"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <footer class="pt-4 pb-2 text-center text-[11px] text-slate-400 dark:text-slate-500 no-print">
+        Alpha Tech Ⓒ All Right reserved 2026 · Authorized: By Wondmagegn Yohannes
+      </footer>
+    </main>
+  </div>
+
+  <!-- ======================== SCREENSHOT MODAL ======================== -->
+  <div id="screenshot-modal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeScreenshotModal()">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-2xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
+      <div class="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+        <div class="min-w-0">
+          <h3 id="modal-title" class="text-sm font-display font-bold text-slate-900 dark:text-white truncate">Payment Screenshot</h3>
+          <p id="modal-subtitle" class="text-xs text-slate-500 dark:text-slate-400 font-mono truncate"></p>
+        </div>
+        <button onclick="closeScreenshotModal()" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-slate-950">
+        <img id="modal-image" src="" alt="Payment Receipt" onclick="toggleZoom()" class="max-w-full max-h-[65vh] object-contain rounded-lg cursor-zoom-in transition-transform" />
+        <div id="modal-no-image" class="hidden text-slate-400 text-sm">No screenshot available for this submission.</div>
+      </div>
+
+      <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-between gap-2">
+        <a id="modal-open-tab" href="#" target="_blank" rel="noopener" class="text-xs text-brand-700 dark:text-brand-400 hover:underline font-bold flex items-center gap-1">
+          <span>Open Full Size</span>
+          <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        </a>
+        <span class="hidden sm:inline text-[11px] text-slate-400">Click image to zoom · <span class="kbd">Esc</span> to close</span>
+        <button onclick="closeScreenshotModal()" class="btn-ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== SHORTCUTS MODAL ======================== -->
+  <div id="shortcuts-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeShortcuts()">
+    <div class="card !bg-white dark:!bg-slate-900 max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display font-bold text-slate-900 dark:text-white flex items-center gap-2"><i data-lucide="keyboard" class="w-4 h-4 text-brand-500"></i> Keyboard shortcuts</h3>
+        <button onclick="closeShortcuts()" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <ul class="space-y-2.5 text-sm text-slate-600 dark:text-slate-300">
+        <li class="flex justify-between"><span>Payments tab</span><span class="kbd">1</span></li>
+        <li class="flex justify-between"><span>Students tab</span><span class="kbd">2</span></li>
+        <li class="flex justify-between"><span>Announcements tab</span><span class="kbd">3</span></li>
+        <li class="flex justify-between"><span>Alerts tab</span><span class="kbd">4</span></li>
+        <li class="flex justify-between"><span>Mock Exams tab</span><span class="kbd">5</span></li>
+        <li class="flex justify-between"><span>Focus search</span><span class="kbd">/</span></li>
+        <li class="flex justify-between"><span>Toggle dark mode</span><span class="kbd">D</span></li>
+        <li class="flex justify-between"><span>Mute / unmute chime</span><span class="kbd">M</span></li>
+        <li class="flex justify-between"><span>Show this help</span><span class="kbd">?</span></li>
+        <li class="flex justify-between"><span>Close any dialog</span><span class="kbd">Esc</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ======================== SUBMISSION RAW DATA MODAL ======================== -->
+  <div id="sub-raw-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4" onclick="if(event.target===this) closeSubRaw()">
+    <div class="card !bg-white dark:!bg-slate-900 max-w-lg w-full p-5 space-y-3 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="font-display font-bold text-slate-900 dark:text-white text-sm flex items-center gap-2"><i data-lucide="braces" class="w-4 h-4 text-brand-500"></i> Submission data</h3>
+        <button onclick="closeSubRaw()" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <pre id="sub-raw-pre" class="text-[11px] font-mono bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 max-h-[60vh] overflow-auto whitespace-pre-wrap break-all text-slate-700 dark:text-slate-200"></pre>
+    </div>
+  </div>
+
+  <!-- ======================== SCRIPT ======================== -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDhb3KHZYGtDzAxd7v7rakyUqwNL4B2YYQ",
+      authDomain: "ju-freshhub.firebaseapp.com",
+      projectId: "ju-freshhub",
+      storageBucket: "ju-freshhub.firebasestorage.app",
+      messagingSenderId: "660385131556",
+      appId: "1:660385131556:web:22a98f637d890564b13cb1"
+    };
+
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let rawPayments = [];
+    let rawUsers = [];
+    let rawAnnouncements = [];
+    let isInitialLoad = true;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      loadTelegramSettings();
+      setupAuthListener();
+      initUI();
+    });
+
+    function setupAuthListener() {
+      auth.onAuthStateChanged((user) => {
+        if (user && user.email && user.email.toLowerCase() === 'ninjaabi213@gmail.com') {
+          document.getElementById('auth-modal').classList.add('hidden');
+          document.getElementById('app-container').classList.remove('hidden');
+          const displayEl = document.getElementById('admin-user-display');
+          if (displayEl) { displayEl.innerText = user.email; }
+          startFirestoreListeners();
+          startExamListeners();
+          lucide.createIcons();
+        } else if (user) {
+          document.getElementById('auth-modal').classList.remove('hidden');
+          document.getElementById('app-container').classList.add('hidden');
+          showAuthError(`Signed in as ${user.email}, but your rules only grant admin access to ninjaabi213@gmail.com.`);
+        } else {
+          document.getElementById('auth-modal').classList.remove('hidden');
+          document.getElementById('app-container').classList.add('hidden');
+        }
+      });
+    }
+
+    function showAuthError(msg) {
+      const errorDiv = document.getElementById('auth-error');
+      errorDiv.innerText = msg;
+      errorDiv.classList.remove('hidden');
+    }
+
+    async function handleAdminLogin(e) {
+      e.preventDefault();
+      const email = document.getElementById('admin-email').value.trim();
+      const password = document.getElementById('admin-password').value;
+      const errorDiv = document.getElementById('auth-error');
+      const btn = document.getElementById('login-btn');
+
+      errorDiv.classList.add('hidden');
+      btn.disabled = true;
+      btn.innerText = "Signing in...";
+
+      try {
+        await auth.signInWithEmailAndPassword(email, password);
+      } catch (err) {
+        showAuthError(err.message || "Failed to sign in.");
+      } finally {
+        btn.disabled = false;
+        btn.innerText = "Sign In to Dashboard";
+      }
+    }
+
+    async function handleAdminRegister() {
+      const email = document.getElementById('admin-email').value.trim();
+      const password = document.getElementById('admin-password').value;
+
+      if (!password || password.length < 6) {
+        showAuthError("Please enter a password of at least 6 characters in the Password field first.");
+        return;
+      }
+
+      try {
+        await auth.createUserWithEmailAndPassword(email, password);
+        toast("Admin account created successfully!", "success");
+      } catch (err) {
+        showAuthError(err.message);
+      }
+    }
+
+    function handleSignOut() {
+      if (confirm("Sign out of the admin panel?")) {
+        auth.signOut();
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🔔 NOTIFICATIONS SYSTEM (Audio + Browser Push + Telegram)
+    // ─────────────────────────────────────────────────────────────
+    function triggerPhoneAlert(title, message, isPayment = false) {
+      // 1. የድምፅ ደወል (Audio Alert)
+      const sound = document.getElementById('notif-sound');
+      if (sound && !isMuted()) {
+        sound.play().catch(() => {});
+      }
+
+      // 2. Browser Push Notification
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, {
+          body: message,
+          icon: "https://img.icons8.com/color/96/graduation-cap.png"
+        });
+      }
+
+      // 3. Telegram Instant Alert
+      sendTelegramMessage(`🔔 *${title}*\n\n${message}`);
+
+      // In-app toast
+      toast(`${title}\n${message}`, isPayment ? "warn" : "info", 7000);
+    }
+
+    function requestNotificationPermission() {
+      if (!("Notification" in window)) {
+        toast("This browser does not support desktop notifications.", "error");
+        return;
+      }
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          toast("Phone notifications are active! You will get alerts when students register or pay.", "success");
+          new Notification("JU FreshHub Alerts Active", { body: "You will receive live alerts for registrations and payments." });
+        }
+      });
+    }
+
+    function loadTelegramSettings() {
+      const token = localStorage.getItem('ju_tg_bot_token') || '';
+      const chatId = localStorage.getItem('ju_tg_chat_id') || '';
+      const tokEl = document.getElementById('tg-bot-token');
+      const chatEl = document.getElementById('tg-chat-id');
+      if (tokEl) tokEl.value = token;
+      if (chatEl) chatEl.value = chatId;
+    }
+
+    function saveTelegramSettings() {
+      const token = document.getElementById('tg-bot-token').value.trim();
+      const chatId = document.getElementById('tg-chat-id').value.trim();
+      localStorage.setItem('ju_tg_bot_token', token);
+      localStorage.setItem('ju_tg_chat_id', chatId);
+      toast("Telegram notification settings saved!", "success");
+    }
+
+    async function sendTelegramMessage(text) {
+      const token = "9082714639:AAGscH5FdluEPIntyAXvp2GB_bO5L7sTTg0";
+      const chatId = "5927660855";
+      if (!token || !chatId) return;
+
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: text,
+            parse_mode: 'Markdown'
+          })
+        });
+      } catch (e) {
+        console.error("Telegram notification failed:", e);
+      }
+    }
+
+    function testTelegramNotification() {
+      const token = document.getElementById('tg-bot-token').value.trim();
+      const chatId = document.getElementById('tg-chat-id').value.trim();
+      if (!token || !chatId) {
+        toast("Please enter both Bot Token and Chat ID first.", "error");
+        return;
+      }
+      sendTelegramMessage("🎓 *JU FreshHub Test Alert*\n\nይህ የሙከራ መልዕክት ነው! ተማሪ ሲመዘገብ ወይም ክፍያ ሲልክ በዚህ መልኩ ስልክህ ላይ ማስታወቂያ ይደርስሃል።")
+        .then(() => toast("Test alert sent to your Telegram! Check your phone.", "success"))
+        .catch(err => toast("Failed to send: " + err, "error"));
+    }
+
+    // Helper to safely extract milliseconds from Firestore timestamps or date strings
+    function getTimestampMs(val) {
+      if (!val) return 0;
+      if (typeof val === 'number') return val;
+      if (val.toMillis) return val.toMillis();
+      if (val.seconds) return val.seconds * 1000;
+      if (val instanceof Date) return val.getTime();
+      const d = new Date(val).getTime();
+      return isNaN(d) ? 0 : d;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 📡 REAL-TIME FIRESTORE MONITORING
+    // ─────────────────────────────────────────────────────────────
+    function startFirestoreListeners() {
+      // 1. Payment Submissions Listener
+      db.collection('payment_submissions')
+        .onSnapshot((snapshot) => {
+          if (!isInitialLoad) {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added") {
+                const data = change.doc.data();
+                triggerPhoneAlert(
+                  "💰 አዲስ የክፍያ ደረሰኝ ደርሷል!",
+                  `ተማሪ: ${data.userName || 'Student'}\nክፍያ: ${data.amountEtb || 199} ETB (${data.paymentMethod || 'Telebirr'})\nTxRef: ${data.transactionReference || 'N/A'}`,
+                  true
+                );
+              }
+            });
+          }
+
+          rawPayments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          rawPayments.sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt));
+          markSynced();
+          updateMetrics();
+          renderPayments();
+        }, (err) => {
+          console.error("Payment listener error:", err);
+          const tbody = document.getElementById('payments-tbody');
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-rose-500 font-semibold">Error reading payments: ${escapeHtml(err.message)}</td></tr>`;
+          }
+        });
+
+      // 2. Users (Student Registrations) Listener
+      db.collection('users')
+        .onSnapshot((snapshot) => {
+          if (!isInitialLoad) {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === "added") {
+                const user = change.doc.data();
+                triggerPhoneAlert(
+                  "🎓 አዲስ ተማሪ ተመዘገበ!",
+                  `ስም: ${user.displayName || 'JU Freshman'}\nስልክ: ${user.phoneNumber || 'Not given'}\nስትሪም: ${user.stream || 'Natural Science'}\nካምፓስ: ${user.campus || 'Main Campus'}`
+                );
+              }
+            });
+          }
+
+          rawUsers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          rawUsers.sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt));
+          markSynced();
+          updateMetrics();
+          renderStudents();
+          isInitialLoad = false;
+        }, (err) => {
+          console.error("Users listener error:", err);
+          const tbody = document.getElementById('students-tbody');
+          if (tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-10 text-rose-500 font-semibold">Error reading students: ${escapeHtml(err.message)}</td></tr>`;
+          }
+        });
+
+      // 3. Announcements Listener
+      db.collection('announcements')
+        .onSnapshot((snapshot) => {
+          rawAnnouncements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          rawAnnouncements.sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt));
+          renderAnnouncements();
+        }, (err) => {
+          console.error("Announcements listener error:", err);
+        });
+    }
+
+    function updateMetrics() {
+      const totalStudents = rawUsers.length;
+      const proUsers = rawUsers.filter(u => u.isProUnlocked === true || u.paymentStatus === 'APPROVED').length;
+      const pendingReviews = rawPayments.filter(p => p.status === 'PENDING_VERIFICATION').length;
+      const totalRevenue = proUsers * 199;
+
+      document.getElementById('metric-total-students').innerText = totalStudents;
+      document.getElementById('metric-pro-users').innerText = proUsers;
+      document.getElementById('metric-pending-payments').innerText = pendingReviews;
+      document.getElementById('metric-total-revenue').innerText = `${totalRevenue.toLocaleString()} ETB`;
+
+      // Extra insights (UI only)
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+      const newToday = rawUsers.filter(u => getTimestampMs(u.createdAt) >= startOfToday.getTime()).length;
+      document.getElementById('metric-new-today').innerText = newToday;
+      document.getElementById('metric-conversion').innerText = totalStudents ? `${Math.round((proUsers / totalStudents) * 100)}%` : '0%';
+
+      // Pending badges + tab title
+      ['tab-badge-pending', 'mob-badge-pending'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerText = pendingReviews;
+        el.classList.toggle('hidden', pendingReviews === 0);
+      });
+      document.title = (pendingReviews > 0 ? `(${pendingReviews}) ` : '') + 'JU FreshHub — Admin & Notification Portal';
+
+      // Stream split
+      const ns = rawUsers.filter(u => (u.stream || 'Natural Science') === 'Natural Science').length;
+      const ss = totalStudents - ns;
+      document.getElementById('split-ns').innerText = ns;
+      document.getElementById('split-ss').innerText = ss;
+      const nsPct = totalStudents ? (ns / totalStudents) * 100 : 50;
+      document.getElementById('split-bar-ns').style.width = nsPct + '%';
+      document.getElementById('split-bar-ss').style.width = (100 - nsPct) + '%';
+
+      // Greeting subline
+      document.getElementById('greeting-sub').innerText = pendingReviews > 0
+        ? `You have ${pendingReviews} receipt${pendingReviews > 1 ? 's' : ''} waiting for review.`
+        : "You're all caught up — no receipts waiting for review. ✨";
+    }
+
+    function renderPaymentChips(counts, active) {
+      const defs = [
+        ['PENDING_VERIFICATION', 'Pending', 'clock'],
+        ['APPROVED', 'Approved', 'check-circle-2'],
+        ['REJECTED', 'Rejected', 'x-circle'],
+        ['ALL', 'All', 'layers'],
+      ];
+      document.getElementById('payment-chips').innerHTML = defs.map(([val, label, icon]) => `
+        <button class="chip ${active === val ? 'chip-active' : ''}" onclick="setPaymentFilter('${val}')">
+          <i data-lucide="${icon}" class="w-3.5 h-3.5"></i>${label}
+          <span class="${active === val ? 'bg-white/25' : 'bg-slate-100 dark:bg-slate-800'} px-1.5 rounded-full text-[10px] font-extrabold">${counts[val] || 0}</span>
+        </button>`).join('');
+    }
+
+    function setPaymentFilter(val) {
+      document.getElementById('payment-filter').value = val;
+      renderPayments();
+    }
+
+    function renderPayments() {
+      const tbody = document.getElementById('payments-tbody');
+      const search = document.getElementById('payment-search').value.toLowerCase().trim();
+      const filter = document.getElementById('payment-filter').value;
+
+      const counts = {
+        ALL: rawPayments.length,
+        PENDING_VERIFICATION: rawPayments.filter(p => p.status === 'PENDING_VERIFICATION').length,
+        APPROVED: rawPayments.filter(p => p.status === 'APPROVED').length,
+        REJECTED: rawPayments.filter(p => p.status === 'REJECTED' || p.status === 'REVOKED').length,
+      };
+      renderPaymentChips(counts, filter);
+
+      const filtered = rawPayments.filter(item => {
+        const matchesStatus = filter === 'ALL' || item.status === filter;
+        const matchesSearch = !search ||
+          (item.userName && item.userName.toLowerCase().includes(search)) ||
+          (item.userEmail && item.userEmail.toLowerCase().includes(search)) ||
+          (item.transactionReference && item.transactionReference.toLowerCase().includes(search)) ||
+          (item.accountPaidTo && item.accountPaidTo.toLowerCase().includes(search));
+        return matchesStatus && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-14">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3"><i data-lucide="inbox" class="w-6 h-6"></i></div>
+          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">No payment receipts found matching criteria.</p>
+          <p class="text-xs text-slate-400 mt-1">Try a different status chip or clear the search.</p></td></tr>`;
+        lucide.createIcons();
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(p => {
+        const statusBadge = getStatusBadge(p.status);
+        const hasImage = p.screenshotUrl || (p.screenshotBase64 && p.screenshotBase64.length > 50);
+        const isPending = p.status === 'PENDING_VERIFICATION';
+        const ago = timeAgo(getTimestampMs(p.createdAt));
+
+        return `
+          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition ${isPending ? 'row-pending' : ''}">
+            <td class="py-3 px-4">
+              <div class="flex items-center gap-3">
+                ${avatar(p.userName || 'Student')}
+                <div class="min-w-0">
+                  <div class="font-bold text-slate-900 dark:text-white truncate">${escapeHtml(p.userName || 'Student')}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">${escapeHtml(p.userEmail || '')}</div>
+                  ${ago ? `<div class="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1"><i data-lucide="clock-3" class="w-3 h-3"></i>${ago}</div>` : ''}
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-4">
+              <span class="inline-block px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 mb-0.5">
+                ${escapeHtml(p.paymentMethod || 'Transfer')}
+              </span>
+              <div class="text-xs text-slate-500 dark:text-slate-400 font-mono copyable" data-copy="${escapeAttr(p.accountPaidTo || '')}" title="Click to copy">${escapeHtml(p.accountPaidTo || 'Account')}</div>
+            </td>
+            <td class="py-3 px-4">
+              <span class="copyable inline-flex items-center gap-1.5 font-mono text-xs font-bold text-brand-700 dark:text-brand-200 bg-brand-50 dark:bg-brand-500/15 px-2 py-1 rounded-lg"
+                    data-copy="${escapeAttr(p.transactionReference || '')}" title="Click to copy">
+                ${escapeHtml(p.transactionReference || 'N/A')}
+                <i data-lucide="copy" class="w-3 h-3 opacity-60"></i>
+              </span>
+            </td>
+            <td class="py-3 px-4 font-display font-extrabold text-slate-800 dark:text-slate-100 whitespace-nowrap">${p.amountEtb || 199} <span class="text-[11px] font-bold text-slate-400">ETB</span></td>
+            <td class="py-3 px-4">
+              ${hasImage ? `
+                <button onclick="viewReceipt('${p.id}')" class="btn-ghost !py-1.5">
+                  <i data-lucide="image" class="w-3.5 h-3.5"></i>
+                  <span>View Proof</span>
+                </button>
+              ` : `<span class="text-xs text-slate-400 italic">No image</span>`}
+            </td>
+            <td class="py-3 px-4">${statusBadge}</td>
+            <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+              ${p.status !== 'APPROVED' ? `
+                <button onclick="approvePayment('${p.id}', '${p.userId}')" class="btn-ok">
+                  <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                  <span>Approve</span>
+                </button>
+              ` : `
+                <button onclick="revokePayment('${p.id}', '${p.userId}')" class="btn-ghost">
+                  Revoke
+                </button>
+              `}
+              ${p.status !== 'REJECTED' && p.status !== 'APPROVED' ? `
+                <button onclick="rejectPayment('${p.id}')" class="btn-danger !px-2" title="Reject">
+                  <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                </button>
+              ` : ''}
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderStudents() {
+      const tbody = document.getElementById('students-tbody');
+      const search = document.getElementById('student-search').value.toLowerCase().trim();
+      const streamFilter = document.getElementById('student-stream-filter').value;
+
+      const filtered = rawUsers.filter(u => {
+        const matchesStream = streamFilter === 'ALL' || u.stream === streamFilter;
+        const matchesSearch = !search ||
+          (u.displayName && u.displayName.toLowerCase().includes(search)) ||
+          (u.email && u.email.toLowerCase().includes(search)) ||
+          (u.phoneNumber && u.phoneNumber.includes(search));
+        return matchesStream && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-14">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3"><i data-lucide="user-x" class="w-6 h-6"></i></div>
+          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">No students found.</p></td></tr>`;
+        lucide.createIcons();
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(u => {
+        const isPro = u.isProUnlocked === true || u.paymentStatus === 'APPROVED';
+        const joined = timeAgo(getTimestampMs(u.createdAt));
+        return `
+          <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+            <td class="py-3 px-4">
+              <div class="flex items-center gap-3">
+                ${avatar(u.displayName || 'JU Student')}
+                <div class="min-w-0">
+                  <div class="font-bold text-slate-900 dark:text-white truncate">${escapeHtml(u.displayName || 'JU Student')}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 truncate">${escapeHtml(u.email || '')}</div>
+                  ${joined ? `<div class="text-[11px] text-slate-400 mt-0.5">Joined ${joined}</div>` : ''}
+                </div>
+              </div>
+            </td>
+            <td class="py-3 px-4">
+              <span class="copyable font-mono text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5" data-copy="${escapeAttr(u.phoneNumber || '')}" title="Click to copy">
+                ${escapeHtml(u.phoneNumber || 'Not provided')}
+                ${u.phoneNumber ? `<i data-lucide="copy" class="w-3 h-3 opacity-50"></i>` : ''}
+              </span>
+              ${u.phoneNumber ? `<a href="tel:${escapeAttr(u.phoneNumber)}" class="ml-2 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline">Call</a>` : ''}
+            </td>
+            <td class="py-3 px-4">
+              <div class="text-xs font-semibold text-slate-800 dark:text-slate-100">${escapeHtml(u.campus || 'Main Campus')}</div>
+              <div class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(u.stream || 'Natural Science')}</div>
+            </td>
+            <td class="py-3 px-4">${getStatusBadge(u.paymentStatus || (isPro ? 'APPROVED' : 'UNPAID'))}</td>
+            <td class="py-3 px-4">
+              <span class="inline-flex items-center text-xs font-bold ${isPro ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400'}">
+                <span class="w-2 h-2 rounded-full ${isPro ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'} mr-1.5"></span>
+                ${isPro ? 'Active Pro' : 'Free / Locked'}
+              </span>
+            </td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="toggleUserPro('${u.id}', ${!isPro})" class="${isPro ? 'btn-warn' : 'btn-primary'}">
+                ${isPro ? 'Revoke Pro' : 'Grant Pro'}
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function renderAnnouncements() {
+      const container = document.getElementById('announcements-list');
+      document.getElementById('announcements-count').innerText = rawAnnouncements.length;
+
+      if (rawAnnouncements.length === 0) {
+        container.innerHTML = `<div class="card p-10 text-center text-slate-400 text-sm">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-3"><i data-lucide="megaphone" class="w-6 h-6"></i></div>
+          No announcements posted yet.</div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = rawAnnouncements.map(a => `
+        <div class="card p-5 space-y-2 ${a.priority ? '!border-rose-300 dark:!border-rose-500/40' : ''}">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center flex-wrap gap-2">
+              <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-200 border border-brand-200 dark:border-brand-500/30">
+                ${escapeHtml(a.tag || 'Notice')}
+              </span>
+              ${a.priority ? `<span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase bg-rose-100 dark:bg-rose-500/20 text-rose-700 dark:text-rose-300">URGENT</span>` : ''}
+              <span class="text-xs text-slate-400 font-medium">${escapeHtml(a.date || '')}</span>
+            </div>
+            <button onclick="deleteAnnouncement('${a.id}')" title="Delete Announcement" class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 p-1.5 rounded-lg transition">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <h4 class="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base">${escapeHtml(a.title)}</h4>
+          <p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">${escapeHtml(a.content)}</p>
+        </div>
+      `).join('');
+
+      lucide.createIcons();
+    }
+
+    async function approvePayment(submissionId, userId) {
+      if (!confirm("Approve this payment receipt and grant permanent Pro Access to the student?")) return;
+
+      try {
+        const batch = db.batch();
+        const paymentRef = db.collection('payment_submissions').doc(submissionId);
+        batch.update(paymentRef, {
+          status: 'APPROVED',
+          reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          reviewedBy: 'ninjaabi213@gmail.com'
+        });
+
+        if (userId) {
+          const userRef = db.collection('users').doc(userId);
+          batch.set(userRef, {
+            isProUnlocked: true,
+            paymentStatus: 'APPROVED',
+            proActivatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+
+        await batch.commit();
+        toast("Payment approved and Pro unlocked for the student!", "success");
+      } catch (err) {
+        console.error("Approval error:", err);
+        toast("Error approving payment: " + err.message, "error");
+      }
+    }
+
+    async function rejectPayment(submissionId) {
+      const reason = prompt("Enter reason for rejection:", "Invalid transaction or unreadable screenshot.");
+      if (reason === null) return;
+
+      try {
+        await db.collection('payment_submissions').doc(submissionId).update({
+          status: 'REJECTED',
+          rejectReason: reason,
+          reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          reviewedBy: 'ninjaabi213@gmail.com'
+        });
+        toast("Receipt rejected.", "info");
+      } catch (err) {
+        toast("Error rejecting payment: " + err.message, "error");
+      }
+    }
+
+    async function revokePayment(submissionId, userId) {
+      if (!confirm("Revoke this approval and lock student Pro access?")) return;
+
+      try {
+        const batch = db.batch();
+        batch.update(db.collection('payment_submissions').doc(submissionId), {
+          status: 'REVOKED',
+          reviewedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          reviewedBy: 'ninjaabi213@gmail.com'
+        });
+        if (userId) {
+          batch.set(db.collection('users').doc(userId), {
+            isProUnlocked: false,
+            paymentStatus: 'REJECTED',
+            proRevokedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }, { merge: true });
+        }
+        await batch.commit();
+        toast("Approval revoked.", "info");
+      } catch (err) {
+        toast("Error revoking access: " + err.message, "error");
+      }
+    }
+
+    async function toggleUserPro(userId, makePro) {
+      const action = makePro ? "grant PRO access to" : "revoke PRO access from";
+      if (!confirm(`Are you sure you want to ${action} this student?`)) return;
+
+      try {
+        const updateData = {
+          isProUnlocked: makePro,
+          paymentStatus: makePro ? 'APPROVED' : 'UNPAID',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        if (makePro) {
+          updateData.proActivatedAt = firebase.firestore.FieldValue.serverTimestamp();
+        } else {
+          updateData.proRevokedAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
+
+        await db.collection('users').doc(userId).set(updateData, { merge: true });
+        toast(makePro ? "Pro access granted." : "Pro access revoked.", "success");
+      } catch (err) {
+        toast("Error updating user: " + err.message, "error");
+      }
+    }
+
+    async function handlePostAnnouncement(e) {
+      e.preventDefault();
+      const title = document.getElementById('ann-title').value.trim();
+      const tag = document.getElementById('ann-tag').value.trim() || 'Notice';
+      const content = document.getElementById('ann-content').value.trim();
+      const priority = document.getElementById('ann-priority').checked;
+      const btn = document.getElementById('ann-submit-btn');
+
+      btn.disabled = true;
+
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+
+        await db.collection('announcements').add({
+          title,
+          tag,
+          content,
+          priority,
+          date: dateStr,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        document.getElementById('ann-title').value = '';
+        document.getElementById('ann-content').value = '';
+        document.getElementById('ann-priority').checked = false;
+        updateAnnCount();
+        toast("Announcement broadcasted successfully to all JU FreshHub apps!", "success");
+      } catch (err) {
+        toast("Failed to publish: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function deleteAnnouncement(id) {
+      if (!confirm("Delete this announcement?")) return;
+      try {
+        await db.collection('announcements').doc(id).delete();
+        toast("Announcement deleted.", "info");
+      } catch (err) {
+        toast("Failed to delete: " + err.message, "error");
+      }
+    }
+
+    function viewReceipt(submissionId) {
+      const item = rawPayments.find(p => p.id === submissionId);
+      if (!item) return;
+
+      const modal = document.getElementById('screenshot-modal');
+      const img = document.getElementById('modal-image');
+      const noImg = document.getElementById('modal-no-image');
+      const openTab = document.getElementById('modal-open-tab');
+
+      document.getElementById('modal-title').innerText = `${item.userName || 'Student'} — ${item.paymentMethod || 'Transfer'}`;
+      document.getElementById('modal-subtitle').innerText = `TxRef: ${item.transactionReference || 'N/A'}`;
+
+      let src = "";
+      if (item.screenshotUrl && item.screenshotUrl.startsWith("http")) {
+        src = item.screenshotUrl;
+      } else if (item.screenshotBase64 && item.screenshotBase64.length > 50) {
+        src = item.screenshotBase64.startsWith("data:") ? item.screenshotBase64 : `data:image/jpeg;base64,${item.screenshotBase64}`;
+      }
+
+      if (src) {
+        img.src = src;
+        img.classList.remove('hidden');
+        noImg.classList.add('hidden');
+        openTab.href = src;
+        openTab.classList.remove('hidden');
+      } else {
+        img.classList.add('hidden');
+        noImg.classList.remove('hidden');
+        openTab.classList.add('hidden');
+      }
+
+      modal.classList.remove('hidden');
+    }
+
+    function closeScreenshotModal() {
+      document.getElementById('screenshot-modal').classList.add('hidden');
+      const img = document.getElementById('modal-image');
+      img.src = "";
+      img.style.transform = '';
+      img.classList.add('cursor-zoom-in');
+      img.classList.remove('cursor-zoom-out');
+    }
+
+    function switchTab(tabId) {
+      ['payments', 'students', 'announcements', 'notifications', 'exams'].forEach(tab => {
+        const view = document.getElementById(`view-${tab}`);
+        const btn = document.getElementById(`tab-btn-${tab}`);
+        const mobBtn = document.getElementById(`mob-tab-${tab}`);
+
+        if (tab === tabId) {
+          view.classList.remove('hidden');
+          if (btn) btn.classList.add('active');
+          if (mobBtn) {
+            mobBtn.classList.add('text-brand-700', 'dark:text-brand-200', 'bg-brand-50', 'dark:bg-brand-500/15', 'font-bold');
+            mobBtn.classList.remove('text-slate-500');
+          }
+        } else {
+          view.classList.add('hidden');
+          if (btn) btn.classList.remove('active');
+          if (mobBtn) {
+            mobBtn.classList.remove('text-brand-700', 'dark:text-brand-200', 'bg-brand-50', 'dark:bg-brand-500/15', 'font-bold');
+            mobBtn.classList.add('text-slate-500');
+          }
+        }
+      });
+      try { localStorage.setItem('ju_last_tab', tabId); } catch (e) {}
+      lucide.createIcons();
+    }
+
+    function getStatusBadge(status) {
+      const s = (status || 'UNPAID').toUpperCase();
+      if (s === 'APPROVED' || s === 'PAID') {
+        return `<span class="badge badge-approved"><i data-lucide="check-circle-2" class="w-3 h-3"></i>Approved</span>`;
+      } else if (s === 'PENDING_VERIFICATION') {
+        return `<span class="badge badge-pending"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 pulse-dot"></span>Pending Review</span>`;
+      } else if (s === 'REJECTED' || s === 'REVOKED') {
+        return `<span class="badge badge-rejected"><i data-lucide="x-circle" class="w-3 h-3"></i>Rejected</span>`;
+      } else {
+        return `<span class="badge badge-unpaid">Unpaid</span>`;
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return '';
+      const div = document.createElement('div');
+      div.innerText = text;
+      return div.innerHTML;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // ✨ UI HELPERS (design & productivity features — no data logic)
+    // ─────────────────────────────────────────────────────────────
+    function escapeAttr(text) {
+      return escapeHtml(String(text || '')).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function avatar(name) {
+      const clean = String(name || '?').trim();
+      const initials = clean.split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+      let hash = 0;
+      for (let i = 0; i < clean.length; i++) hash = (hash * 31 + clean.charCodeAt(i)) % 360;
+      return `<div class="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center text-xs font-extrabold text-white shadow-sm"
+                   style="background:linear-gradient(135deg,hsl(${hash} 70% 55%),hsl(${(hash + 40) % 360} 70% 42%))">${escapeHtml(initials)}</div>`;
+    }
+
+    function timeAgo(ms) {
+      if (!ms) return '';
+      const diff = Date.now() - ms;
+      const s = Math.floor(diff / 1000);
+      if (s < 45) return 'just now';
+      const m = Math.floor(s / 60);
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      const d = Math.floor(h / 24);
+      if (d < 7) return `${d}d ago`;
+      return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // Toasts
+    function toast(message, type = 'info', duration = 4000) {
+      const root = document.getElementById('toast-root');
+      if (!root) return;
+      const styles = {
+        success: ['bg-emerald-600', 'check-circle-2'],
+        error:   ['bg-rose-600', 'alert-triangle'],
+        warn:    ['bg-amber-500', 'bell-ring'],
+        info:    ['bg-slate-900 dark:bg-slate-700', 'info'],
+      };
+      const [bg, icon] = styles[type] || styles.info;
+      const el = document.createElement('div');
+      el.className = `pointer-events-auto animate-toastIn ${bg} text-white rounded-xl shadow-xl px-4 py-3 text-xs font-semibold flex gap-3 items-start`;
+      el.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4 mt-0.5 shrink-0"></i><div class="whitespace-pre-line leading-relaxed flex-1">${escapeHtml(String(message))}</div>
+                      <button class="opacity-70 hover:opacity-100" aria-label="Dismiss"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>`;
+      el.querySelector('button').onclick = () => el.remove();
+      root.appendChild(el);
+      lucide.createIcons();
+      setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = 0; setTimeout(() => el.remove(), 300); }, duration);
+    }
+
+    // Copy to clipboard (event delegation)
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-copy]');
+      if (!el) return;
+      const val = el.getAttribute('data-copy');
+      if (!val) return;
+      (navigator.clipboard ? navigator.clipboard.writeText(val) : Promise.reject())
+        .then(() => toast(`Copied: ${val}`, 'success', 1800))
+        .catch(() => {
+          const ta = document.createElement('textarea'); ta.value = val; document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); toast(`Copied: ${val}`, 'success', 1800); } catch (_) {}
+          ta.remove();
+        });
+    });
+
+    // Theme
+    function toggleTheme() {
+      const isDark = document.documentElement.classList.toggle('dark');
+      try { localStorage.setItem('ju_theme', isDark ? 'dark' : 'light'); } catch (e) {}
+      syncThemeIcon();
+    }
+    function syncThemeIcon() {
+      const isDark = document.documentElement.classList.contains('dark');
+      const icon = document.getElementById('theme-icon');
+      if (icon) { icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon'); lucide.createIcons(); }
+    }
+
+    // Mute chime
+    function isMuted() { try { return localStorage.getItem('ju_muted') === '1'; } catch (e) { return false; } }
+    function toggleMute() {
+      const next = !isMuted();
+      try { localStorage.setItem('ju_muted', next ? '1' : '0'); } catch (e) {}
+      syncMuteIcon();
+      toast(next ? 'Chime muted (Telegram alerts still active).' : 'Chime enabled.', 'info', 2000);
+    }
+    function syncMuteIcon() {
+      const icon = document.getElementById('mute-icon');
+      if (icon) { icon.setAttribute('data-lucide', isMuted() ? 'volume-x' : 'volume-2'); lucide.createIcons(); }
+    }
+
+    // Password / token visibility
+    function togglePasswordVisibility() {
+      const input = document.getElementById('admin-password');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      document.getElementById('pw-eye').setAttribute('data-lucide', show ? 'eye-off' : 'eye');
+      lucide.createIcons();
+    }
+    function toggleTokenVisibility() {
+      const input = document.getElementById('tg-bot-token');
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      document.getElementById('tok-eye').setAttribute('data-lucide', show ? 'eye-off' : 'eye');
+      lucide.createIcons();
+    }
+
+    // Image zoom in receipt modal
+    function toggleZoom() {
+      const img = document.getElementById('modal-image');
+      const zoomed = img.style.transform === 'scale(1.8)';
+      img.style.transform = zoomed ? '' : 'scale(1.8)';
+      img.classList.toggle('cursor-zoom-in', zoomed);
+      img.classList.toggle('cursor-zoom-out', !zoomed);
+    }
+
+    // Announcement templates + counter
+    const ANN_TEMPLATES = {
+      exam: { title: 'Exam Schedule & Rooms Released', tag: 'Exam', content: 'The exam schedule and room assignments are now available. Please arrive 30 minutes early and bring your student ID.\n\nወደ ፈተና ቦታ ከ30 ደቂቃ በፊት ይድረሱ፤ የተማሪ መታወቂያዎን አይርሱ።', priority: true },
+      registration: { title: 'Registration Is Now Open', tag: 'Registrar', content: 'Course registration is open. Please complete your registration before the deadline to avoid late fees.', priority: false },
+      holiday: { title: 'Campus Closed for the Holiday', tag: "Dean's Office", content: 'The campus will be closed for the upcoming holiday. Classes resume on the next working day. Happy holiday to all students!', priority: false },
+      maintenance: { title: 'Scheduled App Maintenance', tag: 'Tech Team', content: 'JU FreshHub will undergo short maintenance tonight. Some features may be briefly unavailable. Thank you for your patience.', priority: false },
+    };
+    function applyTemplate(key) {
+      const t = ANN_TEMPLATES[key]; if (!t) return;
+      document.getElementById('ann-title').value = t.title;
+      document.getElementById('ann-tag').value = t.tag;
+      document.getElementById('ann-content').value = t.content;
+      document.getElementById('ann-priority').checked = t.priority;
+      updateAnnCount();
+      toast('Template applied — edit and publish.', 'info', 1800);
+    }
+    function updateAnnCount() {
+      const n = document.getElementById('ann-content').value.length;
+      document.getElementById('ann-count').innerText = `${n} chars`;
+    }
+
+    // CSV export
+    function csvCell(v) {
+      const s = String(v == null ? '' : v).replace(/"/g, '""');
+      return `"${s}"`;
+    }
+    function downloadCSV(filename, rows) {
+      const csv = '\uFEFF' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+    function stamp() { return new Date().toISOString().slice(0, 10); }
+    function exportPaymentsCSV() {
+      if (!rawPayments.length) return toast('No payments to export yet.', 'error');
+      const rows = [['Student', 'Email', 'Method', 'Account', 'TxRef', 'Amount (ETB)', 'Status', 'Submitted']];
+      rawPayments.forEach(p => rows.push([
+        p.userName, p.userEmail, p.paymentMethod, p.accountPaidTo, p.transactionReference,
+        p.amountEtb || 199, p.status, getTimestampMs(p.createdAt) ? new Date(getTimestampMs(p.createdAt)).toLocaleString() : ''
+      ]));
+      downloadCSV(`ju-freshhub-payments-${stamp()}.csv`, rows);
+      toast(`Exported ${rawPayments.length} payments.`, 'success');
+    }
+    function exportStudentsCSV() {
+      if (!rawUsers.length) return toast('No students to export yet.', 'error');
+      const rows = [['Name', 'Email', 'Phone', 'Campus', 'Stream', 'Payment Status', 'Pro', 'Joined']];
+      rawUsers.forEach(u => rows.push([
+        u.displayName, u.email, u.phoneNumber, u.campus, u.stream,
+        u.paymentStatus || '', (u.isProUnlocked === true || u.paymentStatus === 'APPROVED') ? 'Yes' : 'No',
+        getTimestampMs(u.createdAt) ? new Date(getTimestampMs(u.createdAt)).toLocaleString() : ''
+      ]));
+      downloadCSV(`ju-freshhub-students-${stamp()}.csv`, rows);
+      toast(`Exported ${rawUsers.length} students.`, 'success');
+    }
+
+    // Sync indicator, greeting, clock
+    function markSynced() {
+      const el = document.getElementById('sync-status');
+      if (el) el.innerText = 'Live · synced ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    function updateGreeting() {
+      const h = new Date().getHours();
+      const g = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+      document.getElementById('greeting').innerText = `${g},Wonde!👋`;
+      document.getElementById('live-clock').innerText = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }) +
+        ' · ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // Shortcuts modal
+    function openShortcuts() { document.getElementById('shortcuts-modal').classList.remove('hidden'); lucide.createIcons(); }
+    function closeShortcuts() { document.getElementById('shortcuts-modal').classList.add('hidden'); }
+
+
+    // ─────────────────────────────────────────────────────────────
+    // 🖼 BRANDING IMAGES (logo, login photo, dashboard banner)
+    // Paste permanent image links here (or upload from Alerts & Bot tab).
+    // ─────────────────────────────────────────────────────────────
+    const JU_BRANDING = {
+      logo: 'file_0000000038ec821190116c867f864f21.png',        // image file kept in the SAME folder as this HTML file; or e.g. 'https://yourdomain.com/ju-logo.png'
+      loginPhoto: 'Floating Books and Bright Ideas.png',  // e.g. 'https://yourdomain.com/campus-login.jpg'
+      dashPhoto: 'Learning Journey to the Stars.png'    // e.g. 'https://yourdomain.com/campus-banner.jpg'
+    };
+
+    function safeSrc(u) { return (u.startsWith('data:') || u.includes('%')) ? u : encodeURI(u); }
+
+    function getBrand(key) {
+      try { return localStorage.getItem('ju_brand_' + key) || JU_BRANDING[key] || ''; } catch (e) { return JU_BRANDING[key] || ''; }
+    }
+
+    function applyBranding() {
+      const logo = getBrand('logo');
+      document.querySelectorAll('.ju-logo-box').forEach(box => {
+        const img = box.querySelector('.ju-logo-img');
+        const txt = box.querySelector('.ju-logo-text');
+        if (logo) {
+          img.onerror = () => { img.classList.add('hidden'); txt.classList.remove('hidden'); box.style.background = ''; };
+          img.src = safeSrc(logo); img.classList.remove('hidden'); txt.classList.add('hidden'); box.style.background = '#fff';
+        } else {
+          img.classList.add('hidden'); txt.classList.remove('hidden'); box.style.background = '';
+        }
+      });
+
+      const lp = getBrand('loginPhoto');
+      const hero = document.getElementById('login-hero');
+      const bg = document.getElementById('login-bg');
+      if (lp) {
+        document.getElementById('login-hero-img').src = safeSrc(lp); hero.classList.remove('hidden');
+        bg.src = safeSrc(lp); bg.classList.remove('hidden');
+      } else { hero.classList.add('hidden'); bg.classList.add('hidden'); }
+
+      const dp = getBrand('dashPhoto');
+      const dash = document.getElementById('dash-hero');
+      if (dp) { document.getElementById('dash-hero-img').src = safeSrc(dp); dash.classList.remove('hidden'); }
+      else dash.classList.add('hidden');
+
+      [['logo', 'prev-logo'], ['loginPhoto', 'prev-loginPhoto'], ['dashPhoto', 'prev-dashPhoto']].forEach(([key, id]) => {
+        const v = getBrand(key);
+        const img = document.getElementById(id), empty = document.getElementById(id + '-empty');
+        if (!img) return;
+        if (v) { img.src = safeSrc(v); img.classList.remove('hidden'); empty.classList.add('hidden'); }
+        else { img.classList.add('hidden'); empty.classList.remove('hidden'); }
+      });
+    }
+
+    function handleBrandUpload(key, input) {
+      const file = input.files && input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const im = new Image();
+        im.onload = () => {
+          const max = key === 'logo' ? 320 : 1400;
+          const scale = Math.min(1, max / Math.max(im.width, im.height));
+          const c = document.createElement('canvas');
+          c.width = Math.round(im.width * scale); c.height = Math.round(im.height * scale);
+          c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+          const data = key === 'logo' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.82);
+          try {
+            localStorage.setItem('ju_brand_' + key, data);
+            applyBranding();
+            toast('Image saved!', 'success', 2000);
+          } catch (e) {
+            toast('Image is too large to save in this browser. Try a smaller one or use a link in JU_BRANDING.', 'error', 6000);
+          }
+        };
+        im.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+      input.value = '';
+    }
+
+    function resetBrand(key) {
+      try { localStorage.removeItem('ju_brand_' + key); } catch (e) {}
+      applyBranding();
+      toast('Image removed.', 'info', 1800);
+    }
+
+
+    // ─────────────────────────────────────────────────────────────
+    // 📝 LIVE MOCK EXAM MANAGER
+    // Firestore: "live_exams" (exams)  ·  "live_exam_submissions" (student results)
+    // ─────────────────────────────────────────────────────────────
+    let rawExams = [];
+    let rawSubs = [];
+    let subsNorm = [];
+    let examsLoaded = false;
+    let examListenersStarted = false;
+    let examDraft = null;
+    let examDirty = false;
+    let examsError = null;
+    let subsError = null;
+
+    const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+    const $id = (id) => document.getElementById(id);
+    const escX = (v) => String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    // ── small formatters ──
+    function num(v) {
+      if (v === undefined || v === null || v === '') return null;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : null;
+    }
+    function fmtNum(n) {
+      if (n === null || n === undefined) return '—';
+      return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+    }
+    function fmtDateTime(ms) {
+      return new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+    function fmtClock(sec) {
+      if (sec === null || sec === undefined) return '—';
+      sec = Math.max(0, Math.round(sec));
+      const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+      const p = (n) => String(n).padStart(2, '0');
+      return h ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+    }
+    function toLocalInput(ms) {
+      if (!ms) return '';
+      const d = new Date(ms), p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+
+    // ── listeners (own functions; existing listeners are untouched) ──
+    function startExamListeners() {
+      if (examListenersStarted) return;
+      examListenersStarted = true;
+
+      db.collection('live_exams').onSnapshot((snap) => {
+        rawExams = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        examsLoaded = true;
+        examsError = null;
+        refreshExamData();
+      }, (err) => {
+        console.error('live_exams listener error:', err);
+        examsLoaded = true;
+        examsError = err.message;
+        renderExamList();
+      });
+
+      db.collection('live_exam_submissions').onSnapshot((snap) => {
+        rawSubs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        subsError = null;
+        refreshExamData();
+      }, (err) => {
+        console.error('live_exam_submissions listener error:', err);
+        subsError = err.message;
+        renderExamSubs();
+        renderTop10();
+      });
+
+      // keep "Open / Closing soon / Closed" fresh
+      setInterval(() => { if (examsLoaded) renderExamList(); }, 60000);
+    }
+
+    function refreshExamData() {
+      subsNorm = rawSubs.map(normSub);
+      $id('exam-count-badge').innerText = rawExams.length;
+      $id('sub-count-badge').innerText = rawSubs.length;
+      rebuildExamFilter();
+      renderExamList();
+      renderExamSubs();
+      renderTop10();
+    }
+
+    // ── exam helpers ──
+    function examStatus(e) {
+      const dl = Number(e.deadlineTimestamp) || 0;
+      const now = Date.now();
+      if (!dl) return { key: 'open', label: 'Open', note: 'No deadline', cls: 'badge-approved' };
+      if (dl <= now) return { key: 'closed', label: 'Closed', note: 'Closed ' + fmtDateTime(dl), cls: 'badge-rejected' };
+      const soon = dl - now < 24 * 3600 * 1000;
+      return { key: soon ? 'soon' : 'open', label: soon ? 'Closing soon' : 'Open', note: 'Closes ' + fmtDateTime(dl), cls: soon ? 'badge-pending' : 'badge-approved' };
+    }
+
+    function sortedExams() {
+      const closed = (e) => examStatus(e).key === 'closed';
+      const dlKey = (e) => Number(e.deadlineTimestamp) || Number.MAX_SAFE_INTEGER;
+      return [...rawExams].sort((a, b) => {
+        if (closed(a) !== closed(b)) return closed(a) ? 1 : -1;
+        if (closed(a)) return (b.deadlineTimestamp || 0) - (a.deadlineTimestamp || 0);
+        return (dlKey(a) - dlKey(b)) || String(a.title || '').localeCompare(String(b.title || ''));
+      });
+    }
+
+    function renderExamList() {
+      const box = $id('exam-list');
+      if (!examsLoaded) return;
+      if (examsError) {
+        box.innerHTML = `<div class="card p-8 text-center text-rose-500 text-sm font-semibold lg:col-span-2">Error reading live_exams: ${escX(examsError)}</div>`;
+        return;
+      }
+      const exams = sortedExams();
+
+      if (!exams.length) {
+        box.innerHTML = `<div class="card p-10 text-center lg:col-span-2">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3"><i data-lucide="clipboard-list" class="w-6 h-6"></i></div>
+          <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">No live exams yet.</p>
+          <p class="text-xs text-slate-400 mt-1 mb-4">Create your first Live Mock Exam and publish it to the student app.</p>
+          <button onclick="openExamEditor()" class="btn-primary"><i data-lucide="plus" class="w-4 h-4"></i>New Live Exam</button></div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      box.innerHTML = exams.map(e => {
+        const st = examStatus(e);
+        const qn = Array.isArray(e.questions) ? e.questions.length : 0;
+        const subs = subsNorm.filter(s => s.examId === e.id);
+        const withPct = subs.filter(s => s.pct !== null);
+        const avg = withPct.length ? Math.round(withPct.reduce((a, s) => a + s.pct, 0) / withPct.length) : null;
+        const id = escX(e.id);
+        return `
+          <div class="card p-4 sm:p-5 space-y-3">
+            ${safeImgUrl(e.bannerUrl) ? `<img src="${escX(safeImgUrl(e.bannerUrl))}" alt="" loading="lazy" class="w-full h-28 sm:h-32 object-cover rounded-xl border border-slate-200 dark:border-slate-700" onerror="this.remove()" />` : ''}
+            <div class="flex items-start justify-between gap-3">
+              <h4 class="font-display font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-snug">${escX(e.title || 'Untitled exam')}</h4>
+              <span class="badge ${st.cls} shrink-0">${st.label}</span>
+            </div>
+            <div class="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-500 dark:text-slate-400 font-medium">
+              <span class="inline-flex items-center gap-1.5"><i data-lucide="timer" class="w-3.5 h-3.5"></i>${Number(e.durationMinutes) || 0} min</span>
+              <span class="inline-flex items-center gap-1.5"><i data-lucide="help-circle" class="w-3.5 h-3.5"></i>${qn} question${qn === 1 ? '' : 's'}</span>
+              <span class="inline-flex items-center gap-1.5"><i data-lucide="calendar-clock" class="w-3.5 h-3.5"></i>${escX(st.note)}</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs font-bold">
+              <span class="px-2 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">${subs.length} submission${subs.length === 1 ? '' : 's'}</span>
+              ${avg !== null ? `<span class="px-2 py-1 rounded-lg bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-200">Avg ${avg}%</span>` : ''}
+            </div>
+            <div class="flex flex-wrap gap-2 pt-1">
+              <button class="btn-primary" onclick="openExamEditor('${id}')"><i data-lucide="pencil" class="w-3.5 h-3.5"></i>Edit</button>
+              <button class="btn-ghost" onclick="gotoExamSubs('${id}','subs')"><i data-lucide="inbox" class="w-3.5 h-3.5"></i>Submissions</button>
+              <button class="btn-ghost" onclick="gotoExamSubs('${id}','top')"><i data-lucide="trophy" class="w-3.5 h-3.5"></i>Top 10</button>
+              <button class="btn-ghost" onclick="openExamEditor('${id}', true)" title="Duplicate as a new exam"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+              <button class="btn-danger sm:ml-auto" onclick="deleteExam('${id}')"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i>Delete</button>
+            </div>
+          </div>`;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    // ── sub-tabs ──
+    function switchExamSub(sub) {
+      ['exams', 'subs', 'top'].forEach(k => {
+        $id('exam-panel-' + k).classList.toggle('hidden', k !== sub);
+        $id('subtab-' + k).classList.toggle('chip-active', k === sub);
+      });
+      $id('exam-filter-bar').classList.toggle('hidden', sub === 'exams');
+      $id('exam-subs-tools').classList.toggle('hidden', sub !== 'subs');
+      $id('new-exam-btn').classList.toggle('hidden', sub !== 'exams' || !!examDraft);
+      if (sub === 'subs') renderExamSubs();
+      if (sub === 'top') renderTop10();
+      lucide.createIcons();
+    }
+
+    function gotoExamSubs(examId, sub) {
+      if (examDraft && !closeExamEditor()) return;
+      switchTab('exams');
+      $id('exam-filter').value = examId;
+      switchExamSub(sub);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── default instructions ──
+    const DEFAULT_EXAM_INSTRUCTIONS = [
+      'Read every question carefully before you answer.',
+      'Each question has one correct answer — choose the best option.',
+      'The timer starts as soon as you press Start and cannot be paused. The exam is submitted automatically when time runs out.',
+      'You can change your answers any time before you submit.',
+      'Answer every question; unanswered questions earn no marks.',
+      'Review the explanations after submitting to learn from your mistakes. Good luck!'
+    ].map((t, i) => (i + 1) + '. ' + t).join('\n');
+
+    function getDefaultInstructions() {
+      try { const v = localStorage.getItem('exam_default_instructions'); if (v && v.trim()) return v; } catch (e) {}
+      return DEFAULT_EXAM_INSTRUCTIONS;
+    }
+    function resetInstructions() {
+      $id('exam-instructions').value = getDefaultInstructions();
+      examDirty = true;
+      toast('Default instructions restored.', 'info');
+    }
+    function saveInstructionsAsDefault() {
+      const v = $id('exam-instructions').value.trim();
+      if (!v) return toast('Instructions are empty.', 'error');
+      try { localStorage.setItem('exam_default_instructions', v); toast('Saved as your default for new exams (on this browser).', 'success'); }
+      catch (e) { toast('Could not save the default on this browser.', 'error'); }
+    }
+
+    // ── bulk paste parser ──
+    function toggleBulk() {
+      const b = $id('bulk-body'), open = b.classList.contains('hidden');
+      b.classList.toggle('hidden', !open);
+      $id('bulk-toggle').innerText = open ? 'Close' : 'Open';
+      if (open) $id('bulk-text').focus();
+    }
+
+    // ── LaTeX-style symbols → real math characters ──
+    const MATH_MAP = {
+      sim: '¬', neg: '¬', lnot: '¬', vee: '∨', lor: '∨', wedge: '∧', land: '∧',
+      Rightarrow: '⇒', implies: '⇒', rightarrow: '→', to: '→', Leftarrow: '⇐', leftarrow: '←',
+      Leftrightarrow: '⇔', iff: '⇔', leftrightarrow: '↔', equiv: '≡', therefore: '∴', because: '∵',
+      forall: '∀', exists: '∃', in: '∈', notin: '∉', subset: '⊂', subseteq: '⊆', supset: '⊃', supseteq: '⊇',
+      cup: '∪', cap: '∩', emptyset: '∅', varnothing: '∅', setminus: '∖',
+      times: '×', div: '÷', cdot: '·', pm: '±', mp: '∓', leq: '≤', le: '≤', geq: '≥', ge: '≥',
+      neq: '≠', ne: '≠', approx: '≈', infty: '∞', sqrt: '√', degree: '°', ldots: '…', cdots: '⋯', dots: '…',
+      pi: 'π', theta: 'θ', alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', lambda: 'λ', mu: 'μ',
+      sigma: 'σ', omega: 'ω', phi: 'φ', rho: 'ρ', tau: 'τ', Delta: 'Δ', Sigma: 'Σ', Omega: 'Ω', Pi: 'Π', Theta: 'Θ',
+      sum: '∑', prod: '∏', int: '∫', partial: '∂', nabla: '∇', angle: '∠', perp: '⊥', parallel: '∥',
+      top: '⊤', bot: '⊥', models: '⊨', vdash: '⊢', oplus: '⊕', otimes: '⊗', circ: '∘', propto: '∝', mid: '∣',
+      lt: '<', gt: '>', langle: '⟨', rangle: '⟩', lbrace: '{', rbrace: '}'
+    };
+    const SUP = { '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹', '+': '⁺', '-': '⁻', 'n': 'ⁿ' };
+    const SUB = { '0': '₀', '1': '₁', '2': '₂', '3': '₃', '4': '₄', '5': '₅', '6': '₆', '7': '₇', '8': '₈', '9': '₉' };
+    function mathFix(t) {
+      if (t === undefined || t === null) return t;
+      let s = String(t);
+      if (!/[\\^_]/.test(s)) return s;
+      const before = s;
+      s = s.replace(/\\(?:left|right|big|Big)(?![A-Za-z])/g, '')
+           .replace(/\\[,;!:]|\\q?quad(?![A-Za-z])/g, ' ')
+           .replace(/\\[()\[\]]/g, '')
+           .replace(/\\(?:text|mathrm|mathbf|textbf|mathit|operatorname)\s*\{([^{}]*)\}/g, '$1')
+           .replace(/\\mathbb\s*\{([RNZQC])\}/g, (m, c) => ({ R: 'ℝ', N: 'ℕ', Z: 'ℤ', Q: 'ℚ', C: 'ℂ' })[c])
+           .replace(/\\d?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, (m, a, b) => {
+             const w = (x) => /^[A-Za-z0-9.]+$/.test(x.trim()) ? x.trim() : '(' + x.trim() + ')';
+             return w(a) + '/' + w(b);
+           })
+           .replace(/\\sqrt\s*\{([^{}]*)\}/g, '√($1)')
+           .replace(/\\([A-Za-z]+)/g, (m, c) => Object.prototype.hasOwnProperty.call(MATH_MAP, c) ? MATH_MAP[c] : m)
+           .replace(/\^\{?([0-9+\-]+|n)\}?/g, (m, g) => [...g].map(ch => SUP[ch] || ch).join(''))
+           .replace(/_\{?([0-9]+)\}?/g, (m, g) => [...g].map(ch => SUB[ch] || ch).join(''));
+      if (s !== before) {
+        s = s.replace(/\(\s+/g, '(').replace(/\s+\)/g, ')')
+             .replace(/([~¬])\s+(?=[A-Za-z(\u0370-\u03ff])/g, '$1')
+             .replace(/ {2,}/g, ' ').trim();
+      }
+      return s;
+    }
+    function fixAllSymbols() {
+      if (!examDraft) return;
+      let n = 0;
+      examDraft.questions.forEach(q => {
+        const f = (v) => { const r = mathFix(v); if (r !== v) n++; return r; };
+        q.questionText = f(q.questionText);
+        q.options = q.options.map(f);
+        q.explanation = f(q.explanation);
+      });
+      if (n) { examDirty = true; renderQuestions(); }
+      toast(n ? `Converted symbols in ${n} field${n === 1 ? '' : 's'}.` : 'No LaTeX-style symbols found.', n ? 'success' : 'info');
+    }
+
+    // split "stem A) … B) … C) … D) … [E) …]" (options may be on one line, wrapped, or on separate lines)
+    function splitStemOptions(body) {
+      const marks = [];
+      let from = 0;
+      for (let k = 0; k < 6; k++) {
+        const Lt = 'ABCDEF'[k];
+        const up = new RegExp('(^|\\s)\\(?' + Lt + '[.)](?=\\s|$)', 'g');
+        const lo = new RegExp('^\\(?' + Lt.toLowerCase() + '[.)](?=\\s|$)', 'gm');
+        up.lastIndex = from; lo.lastIndex = from;
+        const a = up.exec(body), b = lo.exec(body);
+        const cand = [];
+        if (a) cand.push({ start: a.index + a[1].length, end: a.index + a[0].length });
+        if (b) cand.push({ start: b.index, end: b.index + b[0].length });
+        if (!cand.length) break;
+        cand.sort((x, y) => x.start - y.start);
+        marks.push(cand[0]); from = cand[0].end;
+      }
+      if (marks.length < 2) return { stem: body, opts: [] };
+      const clean = (x) => x.replace(/\s*\n\s*/g, ' ').replace(/ {2,}/g, ' ').trim();
+      const opts = marks.map((mk, i) => clean(body.slice(mk.end, i + 1 < marks.length ? marks[i + 1].start : body.length)));
+      return { stem: clean(body.slice(0, marks[0].start)), opts: opts.slice(0, 5) };
+    }
+
+    function parseBulkQuestions(raw) {
+      let text = String(raw || '').replace(/\r\n?/g, '\n').replace(/[\u00a0\u200b\u200c\u200d\ufeff]/g, ' ');
+      const L = (c) => 'ABCDEF'.indexOf(String(c).toUpperCase());
+
+      // answer key at the end ("Answer Key: 1-B 2-C …")
+      const keyMap = {};
+      const lines0 = text.split('\n');
+      for (let i = 0; i < lines0.length; i++) {
+        if (/^\s*(?:answer\s*key|answers|answer\s*sheet|key)\b\s*[:\-–]?/i.test(lines0[i])) {
+          const tail = lines0.slice(i).join('\n');
+          const re = /(\d+)\s*[\.\-–:)=]*\s*\(?([A-Fa-f])\)?(?![A-Za-z])/g;
+          let m, found = 0;
+          while ((m = re.exec(tail))) { keyMap[Number(m[1])] = L(m[2]); found++; }
+          if (found >= 2) { text = lines0.slice(0, i).join('\n'); break; }
+          for (const k in keyMap) delete keyMap[k];
+        }
+      }
+
+      const QST = /^(?:Q(?:uestion)?\s*\.?\s*)?(\d+)\s*[\.\)\-:]\s*(.*)$/i;
+      const ANS = /^[-•*–]?\s*(?:correct\s+)?(?:answer|ans|correct|key)\s*(?:is)?\s*[:\-=]?\s*\(?([A-Fa-f])\)?(?![A-Za-z])\s*(.*)$/i;
+      const EXP = /^[-•*–]?\s*(?:explanation|solution|rationale|reason|exp)\s*[:\-]\s*(.*)$/i;
+      const MARK = /^(?:\*+\s*|[✓✔✅]\s*)|(?:\s*\*+|\s*[✓✔✅]|\s*\((?:correct|answer)\))\s*$/i;
+
+      const blocks = [];
+      let cur = null, prevBlank = true;
+      const newB = (num, first) => { cur = { num, body: first ? [first] : [], correct: -1, hasAns: false, inExp: false, exp: [] }; blocks.push(cur); };
+      const hasOptions = (b) => /(^|\s)\(?B[.)](?=\s|$)/.test(b.body.join('\n')) || /^\(?b[.)](?=\s|$)/m.test(b.body.join('\n'));
+
+      for (const rawLine of text.split('\n')) {
+        const line = rawLine.trim();
+        if (!line) { prevBlank = true; continue; }
+        const wasBlank = prevBlank; prevBlank = false;
+        let m;
+
+        if (cur && cur.body.length && (m = line.match(ANS))) {
+          const idx = L(m[1]); if (idx >= 0 && idx < 5) cur.correct = idx;
+          cur.hasAns = true; cur.inExp = false; continue;
+        }
+        if (cur && (m = line.match(EXP))) { cur.inExp = true; if (m[1]) cur.exp.push(m[1]); continue; }
+
+        if ((m = line.match(QST))) {
+          const num = Number(m[1]);
+          const isNew = !cur || ((hasOptions(cur) || cur.hasAns) && (!cur.inExp || num === cur.num + 1 || (wasBlank && !/^\s/.test(rawLine))));
+          if (isNew) { newB(num, m[2]); continue; }
+        }
+
+        if (!cur) { newB(null, line); continue; }
+        if (cur.inExp) { cur.exp.push(line); continue; }
+        if (cur.hasAns || (hasOptions(cur) && wasBlank)) { newB(null, line); continue; }
+        cur.body.push(line);
+      }
+
+      const out = blocks.map((b, i) => {
+        const { stem, opts } = splitStemOptions(b.body.join('\n'));
+        let correct = b.correct;
+        const options = [0, 1, 2, 3, 4].map(j => {
+          let o = opts[j] || '';
+          if (o && MARK.test(o)) { o = o.replace(MARK, '').replace(MARK, '').trim(); if (correct < 0) correct = j; }
+          return o;
+        });
+        if (correct < 0) {
+          const k = (b.num != null && keyMap[b.num] !== undefined) ? keyMap[b.num] : keyMap[i + 1];
+          if (k !== undefined && k >= 0 && k < 5) correct = k;
+        }
+        // hard-wrapped explanation lines are joined with spaces; list-like lines keep their own line
+        let exp = '';
+        b.exp.forEach(l => { exp += exp ? (/^(?:\d+[.)]|[-•*]|Step\b)/i.test(l) ? '\n' : ' ') + l : l; });
+        return {
+          questionText: mathFix(stem.trim()),
+          options: options.map(mathFix),
+          correctIndex: correct,
+          explanation: mathFix(exp.trim())
+        };
+      }).filter(q => q.questionText || q.options.some(o => o));
+      return { questions: out, extraOptions: 0 };
+    }
+
+    function importBulk(replaceAll) {
+      if (!examDraft) return;
+      const res = parseBulkQuestions($id('bulk-text').value);
+      const msg = $id('bulk-msg');
+      if (!res.questions.length) { msg.className = 'text-xs font-semibold text-rose-500'; msg.innerText = 'No questions found. Paste the questions with their A/B/C/D choices.'; return; }
+
+      const qsNow = examDraft.questions;
+      const onlyBlank = qsNow.length === 1 && !qsNow[0].questionText.trim() && !qsNow[0].options.some(o => o.trim()) && !qsNow[0].explanation.trim();
+      if (replaceAll || onlyBlank) examDraft.questions = [];
+      const firstNew = examDraft.questions.length;
+      examDraft.questions.push(...res.questions);
+      examDirty = true;
+      renderQuestions();
+
+      const noAns = res.questions.filter(q => q.correctIndex < 0).length;
+      const badOpts = res.questions.filter(q => q.options.slice(0, 4).some(o => !o) || (q.correctIndex === 4 && !q.options[4])).length;
+      const parts = [`Added ${res.questions.length} question${res.questions.length === 1 ? '' : 's'}.`];
+      if (noAns) parts.push(`${noAns} need a correct answer.`);
+      if (badOpts) parts.push(`${badOpts} have missing choices.`);
+      const needsWork = noAns || badOpts;
+      msg.className = 'text-xs font-semibold ' + (needsWork ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400');
+      msg.innerText = parts.join(' ') + (needsWork ? ' Highlighted below.' : ' Check them and press Save & Publish.');
+      if (!needsWork) $id('bulk-text').value = '';
+
+      const target = res.questions.findIndex(q => q.correctIndex < 0 || q.options.slice(0, 4).some(o => !o) || (q.correctIndex === 4 && !q.options[4]));
+      const el = $id('qcard-' + (firstNew + (target >= 0 ? target : 0)));
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 🖼️ LIVE MOCK EXAM BANNER  →  Supabase Storage (public bucket "exam-banners")
+    // The public URL is stored on the Firestore exam doc as bannerUrl (+ bannerPath).
+    // ─────────────────────────────────────────────────────────────
+    // JU FreshHub banner storage — configured once in this file.
+    // Use the project root URL (not the /rest/v1 endpoint).
+    const SUPABASE_DEFAULTS = {
+      url: 'https://eztmptnpgneodtlotqii.supabase.co',
+      anonKey: 'sb_publishable_64tjhjYMF01IIbVOJ8HDEw_QpSYYh8l'
+    };
+    const BANNER_BUCKET = 'exam-banners';
+    const BANNER_MAX_MB = 8;
+
+    function sbConfig() {
+      // Fixed project configuration: no browser prompt or per-device setup required.
+      // Strip accidental REST endpoint suffixes if one is pasted into the project URL.
+      let url = String(SUPABASE_DEFAULTS.url || '').trim().replace(/\/+$/, '');
+      url = url.replace(/\/rest\/v1$/i, '');
+      if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+      return { url, key: String(SUPABASE_DEFAULTS.anonKey || '').trim() };
+    }
+    function sbReady() { const c = sbConfig(); return !!(c.url && c.key); }
+    function sbHeaders(extra) {
+      const c = sbConfig();
+      // Supabase publishable keys belong in the apikey header; they are not JWTs.
+      // Legacy anon keys are JWTs and can also be sent as the bearer token.
+      const headers = { apikey: c.key };
+      if (!c.key.startsWith('sb_publishable_')) headers.Authorization = 'Bearer ' + c.key;
+      return Object.assign(headers, extra || {});
+    }
+    function bannerPublicUrl(path) { return `${sbConfig().url}/storage/v1/object/public/${BANNER_BUCKET}/${path}`; }
+    function safeImgUrl(u) { return /^https?:\/\//i.test(String(u || '')) ? String(u) : ''; }
+
+    function toggleSbSettings(force) {
+      const box = $id('sb-settings');
+      const open = force !== undefined ? force : box.classList.contains('hidden');
+      box.classList.toggle('hidden', !open);
+      if (open) {
+        const c = sbConfig();
+        $id('sb-url').value = c.url; $id('sb-key').value = c.key;
+        lucide.createIcons();
+      }
+    }
+    function setSbStatus(msg, kind) {
+      const el = $id('sb-status');
+      el.className = 'text-[11px] font-semibold ' + (kind === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : kind === 'err' ? 'text-rose-500' : 'text-slate-500 dark:text-slate-400');
+      el.innerText = msg || '';
+    }
+    function saveSbSettings() {
+      setSbStatus(sbReady() ? 'Supabase is already configured in this JU FreshHub file.' : 'Supabase configuration is missing.', sbReady() ? 'ok' : 'err');
+    }
+    async function testSbSettings() {
+      if (!sbReady()) return setSbStatus('Supabase configuration is missing from this file.', 'err');
+      setSbStatus('Checking bucket…');
+      try {
+        const r = await fetch(`${sbConfig().url}/storage/v1/bucket/${BANNER_BUCKET}`, { headers: sbHeaders() });
+        if (r.ok) {
+          const b = await r.json();
+          setSbStatus(b && b.public === false ? 'Bucket found but it is PRIVATE — make it public.' : 'Connected — bucket "exam-banners" is ready.', b && b.public === false ? 'err' : 'ok');
+        } else if (r.status === 404 || r.status === 400) setSbStatus('Bucket "exam-banners" not found — create it as a public bucket.', 'err');
+        else if (r.status === 401 || r.status === 403) setSbStatus('Key rejected, or the key cannot read bucket info. You can still try an upload.', 'err');
+        else setSbStatus('Unexpected response (' + r.status + ').', 'err');
+      } catch (e) { setSbStatus('Could not reach Supabase. Check the project URL.', 'err'); }
+    }
+
+    // ── preview / state ──
+    function renderBanner() {
+      const d = examDraft; if (!d) return;
+      const url = safeImgUrl(d.bannerUrl);
+      $id('banner-preview').innerHTML = url
+        ? `<img src="${escX(url)}" alt="Exam banner" class="w-full max-h-56 object-cover block" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'p-6 text-center text-xs font-semibold text-rose-500',innerText:'Banner image could not be loaded.'}))" />`
+        : `<div class="p-6 text-center text-xs font-semibold text-slate-400"><i data-lucide="image-plus" class="w-6 h-6 mx-auto mb-1.5"></i>Drag an image here or press “Upload banner”<br><span class="font-medium">PNG, JPG, WEBP or GIF · up to ${BANNER_MAX_MB} MB</span></div>`;
+      $id('banner-remove-btn').classList.toggle('hidden', !url);
+      $id('banner-url-row').classList.toggle('hidden', !url);
+      $id('banner-url').value = url;
+      $id('banner-upload-label').innerText = url ? 'Replace banner' : 'Upload banner';
+      lucide.createIcons();
+    }
+    function bannerProgress(pct, msg) {
+      const box = $id('banner-progress');
+      if (pct === null) { box.classList.add('hidden'); return; }
+      box.classList.remove('hidden');
+      $id('banner-bar').style.width = pct + '%';
+      $id('banner-status').innerText = msg || '';
+    }
+    function pickBanner() {
+      if (!examDraft) return;
+      if (!sbReady()) { toast('Banner storage is not configured. Contact the site administrator.', 'error'); return; }
+      $id('banner-file').click();
+    }
+    function onBannerPicked(input) {
+      const f = input.files && input.files[0];
+      input.value = '';
+      if (f) handleBannerFile(f);
+    }
+    function onBannerDrop(ev) {
+      ev.preventDefault();
+      $id('banner-drop').classList.remove('ring-2', 'ring-brand-400');
+      const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (!f) return;
+      if (!sbReady()) { toast('Banner storage is not configured. Contact the site administrator.', 'error'); return; }
+      handleBannerFile(f);
+    }
+    function copyBannerUrl() {
+      const v = $id('banner-url').value;
+      if (!v) return;
+      (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(
+        () => toast('Banner URL copied.', 'success'),
+        () => { $id('banner-url').select(); document.execCommand && document.execCommand('copy'); toast('Banner URL copied.', 'success'); });
+    }
+
+    // downscale big images (keeps the app fast); GIFs are left untouched
+    async function prepareBanner(file) {
+      if (!/^image\/(png|jpe?g|webp)$/i.test(file.type)) return file;
+      try {
+        const bmp = await createImageBitmap(file);
+        const maxW = 1600;
+        if (bmp.width <= maxW && file.size <= 1.5 * 1024 * 1024) { bmp.close && bmp.close(); return file; }
+        const scale = Math.min(1, maxW / bmp.width);
+        const c = document.createElement('canvas');
+        c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+        c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+        bmp.close && bmp.close();
+        let blob = await new Promise(res => c.toBlob(res, 'image/webp', 0.85));
+        if (!blob || blob.type !== 'image/webp') blob = await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85));
+        if (!blob || blob.size >= file.size) return file;
+        const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+        return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.' + ext, { type: blob.type });
+      } catch (e) { return file; }
+    }
+
+    function uploadBannerFile(file, onProgress) {
+      const ext = ({ 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' })[file.type] || 'png';
+      const path = `banner_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${sbConfig().url}/storage/v1/object/${BANNER_BUCKET}/${path}`);
+        const h = sbHeaders({ 'Content-Type': file.type, 'cache-control': 'max-age=31536000', 'x-upsert': 'false' });
+        Object.keys(h).forEach(k => xhr.setRequestHeader(k, h[k]));
+        xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) return resolve({ path, url: bannerPublicUrl(path) });
+          let detail = ''; try { const j = JSON.parse(xhr.responseText); detail = j.message || j.error || ''; } catch (e) {}
+          if (xhr.status === 404 || /bucket not found/i.test(detail)) return reject(new Error('Bucket "exam-banners" was not found. Create it in Supabase as a public bucket.'));
+          if (xhr.status === 401 || xhr.status === 403 || /row-level security|policy|unauthorized/i.test(detail))
+            return reject(new Error('Supabase refused the upload. Check the anon key and add the upload policy (see Storage settings → One-time setup).'));
+          if (xhr.status === 413) return reject(new Error('The image is too large for your Supabase storage limit.'));
+          reject(new Error(detail || ('Upload failed (' + xhr.status + ').')));
+        };
+        xhr.onerror = () => reject(new Error('Network error — could not reach Supabase.'));
+        xhr.send(file);
+      });
+    }
+
+    async function handleBannerFile(file) {
+      const d = examDraft; if (!d) return;
+      if (d.uploading) return toast('A banner is already uploading.', 'info');
+      if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) return toast('Please choose a PNG, JPG, WEBP or GIF image.', 'error');
+      if (file.size > BANNER_MAX_MB * 1024 * 1024) return toast(`Image is larger than ${BANNER_MAX_MB} MB.`, 'error');
+      if (!sbReady()) return toast('Banner storage is not configured. Contact the site administrator.', 'error');
+
+      d.uploading = true;
+      $id('banner-upload-btn').disabled = true;
+      bannerProgress(0, 'Preparing image…');
+      try {
+        const prepared = await prepareBanner(file);
+        bannerProgress(0, 'Uploading…');
+        const res = await uploadBannerFile(prepared, (pct) => bannerProgress(pct, `Uploading… ${pct}%`));
+        if (examDraft !== d) { deleteBannerFile(res.path); return; }   // editor was closed meanwhile
+        d.newPaths.push(res.path);
+        d.bannerUrl = res.url; d.bannerPath = res.path;
+        examDirty = true;
+        renderBanner();
+        toast('Banner uploaded. Press Save & Publish to attach it to the exam.', 'success', 4500);
+      } catch (e) {
+        console.error('Banner upload error:', e);
+        toast(e.message || 'Banner upload failed.', 'error', 7000);
+      } finally {
+        d.uploading = false;
+        $id('banner-upload-btn').disabled = false;
+        bannerProgress(null);
+      }
+    }
+    function removeBanner() {
+      if (!examDraft) return;
+      examDraft.bannerUrl = ''; examDraft.bannerPath = '';
+      examDirty = true;
+      renderBanner();
+    }
+    // best-effort cleanup of files nobody uses any more (needs the delete policy; failures are ignored)
+    function deleteBannerFile(path) {
+      if (!path || !sbReady()) return;
+      try { fetch(`${sbConfig().url}/storage/v1/object/${BANNER_BUCKET}/${path}`, { method: 'DELETE', headers: sbHeaders() }).catch(() => {}); } catch (e) {}
+    }
+    function bannerInUseByOther(path, exceptId) { return rawExams.some(e => e.id !== exceptId && e.bannerPath === path); }
+    function cleanupBannersAfterSave(d) {
+      const keep = d.bannerPath || '';
+      d.newPaths.filter(p => p !== keep).forEach(deleteBannerFile);
+      if (d.origBannerPath && d.origBannerPath !== keep && !bannerInUseByOther(d.origBannerPath, d.id)) deleteBannerFile(d.origBannerPath);
+    }
+
+    // ── editor ──
+    function blankQuestion() {
+      return { questionText: '', options: ['', '', '', '', ''], correctIndex: 0, explanation: '' };
+    }
+
+    function openExamEditor(id, asCopy) {
+      const src = id ? rawExams.find(e => e.id === id) : null;
+      if (id && !src) return toast('Exam not found.', 'error');
+
+      const qs = src && Array.isArray(src.questions) && src.questions.length
+        ? [...src.questions].sort((a, b) => (a.questionNumber || 0) - (b.questionNumber || 0)).map(q => ({
+            questionText: String(q.questionText || ''),
+            options: [0, 1, 2, 3, 4].map(j => (q.options && q.options[j] != null) ? String(q.options[j]) : ''),
+            correctIndex: (Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex <= 4) ? q.correctIndex : 0,
+            explanation: String(q.explanation || '')
+          }))
+        : [blankQuestion()];
+
+      examDraft = {
+        id: (src && !asCopy) ? src.id : null, questions: qs,
+        bannerUrl: src ? String(src.bannerUrl || '') : '',
+        bannerPath: (src && !asCopy) ? String(src.bannerPath || '') : '',
+        origBannerPath: (src && !asCopy) ? String(src.bannerPath || '') : '',
+        newPaths: [], uploading: false, saved: false
+      };
+      examDirty = false;
+
+      $id('exam-title').value = src ? (asCopy ? 'Copy of ' + (src.title || '') : (src.title || '')) : '';
+      $id('exam-duration').value = src ? (Number(src.durationMinutes) || '') : 60;
+      $id('exam-deadline').value = (src && !asCopy) ? toLocalInput(Number(src.deadlineTimestamp) || 0) : '';
+      $id('exam-instructions').value = (src && typeof src.instructions === 'string' && src.instructions.trim()) ? src.instructions : getDefaultInstructions();
+      $id('bulk-text').value = ''; $id('bulk-msg').innerText = '';
+      $id('editor-heading').innerText = examDraft.id ? 'Edit Live Exam' : (asCopy ? 'Duplicate Live Exam' : 'Create Live Exam');
+
+      const n = examDraft.id ? subsNorm.filter(s => s.examId === examDraft.id).length : 0;
+      const warn = $id('exam-editor-warning');
+      warn.classList.toggle('hidden', n === 0);
+      warn.querySelector('span').innerText = `${n} student${n === 1 ? ' has' : 's have'} already submitted this exam. Changing questions or correct answers will not re-grade existing submissions.`;
+
+      renderQuestions();
+      renderBanner(); bannerProgress(null); toggleSbSettings(false);
+      $id('exam-editor').classList.remove('hidden');
+      $id('exam-list').classList.add('hidden');
+      $id('new-exam-btn').classList.add('hidden');
+      lucide.createIcons();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // returns true when the editor was closed
+    function closeExamEditor(force) {
+      if (!force && examDirty && !confirm('Discard your unsaved changes?')) return false;
+      if (examDraft && !examDraft.saved) examDraft.newPaths.forEach(deleteBannerFile);
+      examDraft = null;
+      examDirty = false;
+      $id('exam-editor').classList.add('hidden');
+      $id('exam-list').classList.remove('hidden');
+      $id('new-exam-btn').classList.remove('hidden');
+      return true;
+    }
+
+    const optBox = (on) => 'flex items-center gap-2 rounded-xl border px-3 py-2 transition ' + (on
+      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 ring-1 ring-emerald-500/40'
+      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900');
+
+    function renderQuestions() {
+      const qs = examDraft.questions;
+      $id('q-count').innerText = qs.length;
+      $id('q-list').innerHTML = qs.map((q, i) => `
+        <div id="qcard-${i}" class="rounded-2xl border ${(q.correctIndex < 0 || (q.questionText.trim() && (q.options.slice(0, 4).some(o => !o.trim()) || (q.correctIndex === 4 && !q.options[4].trim())))) ? 'border-amber-400 ring-1 ring-amber-300' : 'border-slate-200 dark:border-slate-700'} bg-slate-50/60 dark:bg-slate-900/50 p-3 sm:p-4 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <span class="inline-flex items-center justify-center min-w-[2rem] h-8 px-2 rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-white text-xs font-extrabold">Q${i + 1}</span>
+            <div class="flex gap-1">
+              <button type="button" class="btn-ghost !px-2" onclick="moveQ(${i}, -1)" ${i === 0 ? 'disabled' : ''} title="Move up"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i></button>
+              <button type="button" class="btn-ghost !px-2" onclick="moveQ(${i}, 1)" ${i === qs.length - 1 ? 'disabled' : ''} title="Move down"><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i></button>
+              <button type="button" class="btn-ghost !px-2" onclick="dupQ(${i})" title="Duplicate question"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+              <button type="button" class="btn-danger !px-2" onclick="delQ(${i})" title="Delete question"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+
+          <div>
+            <label class="label">Question text</label>
+            <textarea rows="3" oninput="updQ(${i}, 'questionText', this.value)" placeholder="Type the question (plain text or equation text)…" class="input resize-y">${escX(q.questionText)}</textarea>
+          </div>
+
+          <div>
+            <label class="label">Options — select the correct answer <span class="normal-case tracking-normal font-semibold text-slate-400">(E is optional)</span></label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              ${[0, 1, 2, 3, 4].map(j => `
+                <label id="opt-${i}-${j}" class="${optBox(q.correctIndex === j)}">
+                  <input type="radio" name="correct-${i}" ${q.correctIndex === j ? 'checked' : ''} onchange="setCorrect(${i}, ${j})" class="w-4 h-4 text-emerald-600 focus:ring-emerald-500 shrink-0" title="Mark ${LETTERS[j]} as correct" />
+                  <span class="w-4 text-xs font-extrabold text-slate-500 dark:text-slate-400 shrink-0">${LETTERS[j]}</span>
+                  <input type="text" value="${escX(q.options[j])}" oninput="updOpt(${i}, ${j}, this.value)" placeholder="Option ${LETTERS[j]}${j === 4 ? ' (optional)' : ''}" class="flex-1 min-w-0 bg-transparent outline-none text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400" />
+                </label>`).join('')}
+            </div>
+          </div>
+
+          <div>
+            <label class="label">Explanation <span class="normal-case tracking-normal font-semibold text-slate-400">(step-by-step solution shown after the exam)</span></label>
+            <textarea rows="3" oninput="updQ(${i}, 'explanation', this.value)" placeholder="Explain how to reach the correct answer…" class="input resize-y">${escX(q.explanation)}</textarea>
+          </div>
+        </div>`).join('');
+      lucide.createIcons();
+    }
+
+    function clearQErr(i) {
+      const el = $id('qcard-' + i);
+      if (el) el.classList.remove('!border-rose-400', 'ring-2', 'ring-rose-300');
+    }
+    function updQ(i, key, val) { examDraft.questions[i][key] = val; examDirty = true; clearQErr(i); }
+    function updOpt(i, j, val) { examDraft.questions[i].options[j] = val; examDirty = true; clearQErr(i); }
+    function setCorrect(i, j) {
+      examDraft.questions[i].correctIndex = j;
+      examDirty = true;
+      [0, 1, 2, 3, 4].forEach(k => { const el = $id(`opt-${i}-${k}`); if (el) el.className = optBox(k === j); });
+    }
+    function addQuestion() {
+      examDraft.questions.push(blankQuestion());
+      examDirty = true;
+      renderQuestions();
+      const card = $id('qcard-' + (examDraft.questions.length - 1));
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const ta = card.querySelector('textarea');
+      if (ta) ta.focus({ preventScroll: true });
+    }
+    function moveQ(i, dir) {
+      const qs = examDraft.questions, k = i + dir;
+      if (k < 0 || k >= qs.length) return;
+      [qs[i], qs[k]] = [qs[k], qs[i]];
+      examDirty = true;
+      renderQuestions();
+      const el = $id('qcard-' + k); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function dupQ(i) {
+      const q = examDraft.questions[i];
+      examDraft.questions.splice(i + 1, 0, { questionText: q.questionText, options: [...q.options], correctIndex: q.correctIndex, explanation: q.explanation });
+      examDirty = true;
+      renderQuestions();
+      const el = $id('qcard-' + (i + 1)); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function delQ(i) {
+      const q = examDraft.questions[i];
+      const hasContent = q.questionText.trim() || q.options.some(o => o.trim()) || q.explanation.trim();
+      if (hasContent && !confirm(`Delete question ${i + 1}?`)) return;
+      examDraft.questions.splice(i, 1);
+      if (!examDraft.questions.length) examDraft.questions.push(blankQuestion());
+      examDirty = true;
+      renderQuestions();
+    }
+
+    // ── validate + save ──
+    function validateExam(m) {
+      if (!m.title) return { msg: 'Please enter an exam title.', field: 'exam-title' };
+      if (!m.durRaw || !Number.isInteger(m.duration) || m.duration < 1 || m.duration > 1440)
+        return { msg: 'Duration must be a whole number of minutes between 1 and 1440.', field: 'exam-duration' };
+      if (m.dlRaw && Number.isNaN(m.deadline)) return { msg: 'The deadline date is not valid.', field: 'exam-deadline' };
+      if (!examDraft.questions.length) return { msg: 'Add at least one question.' };
+      for (let i = 0; i < examDraft.questions.length; i++) {
+        const q = examDraft.questions[i];
+        if (!q.questionText.trim()) return { msg: `Question ${i + 1}: enter the question text.`, q: i };
+        for (let j = 0; j < 4; j++) {
+          if (!q.options[j].trim()) return { msg: `Question ${i + 1}: option ${LETTERS[j]} is empty.`, q: i };
+        }
+        if (q.correctIndex === 4 && !q.options[4].trim()) return { msg: `Question ${i + 1}: option E is marked correct but is empty.`, q: i };
+        if (!Number.isInteger(q.correctIndex) || q.correctIndex < 0 || q.correctIndex > 4)
+          return { msg: `Question ${i + 1}: choose the correct option.`, q: i };
+      }
+      return null;
+    }
+
+    async function saveExam() {
+      if (!examDraft) return;
+      if (examDraft.uploading) return toast('Please wait for the banner upload to finish.', 'info');
+      const dlRaw = $id('exam-deadline').value;
+      const m = {
+        title: $id('exam-title').value.trim(),
+        durRaw: $id('exam-duration').value.trim(),
+        duration: Number($id('exam-duration').value),
+        dlRaw,
+        deadline: dlRaw ? new Date(dlRaw).getTime() : 0
+      };
+
+      const err = validateExam(m);
+      if (err) {
+        toast(err.msg, 'error', 5000);
+        if (err.field) { const f = $id(err.field); f.focus(); f.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        if (err.q !== undefined) {
+          const card = $id('qcard-' + err.q);
+          card.classList.add('!border-rose-400', 'ring-2', 'ring-rose-300');
+          card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
+      }
+
+      if (m.deadline && m.deadline <= Date.now() &&
+          !confirm('That deadline is already in the past, so students will not be able to take this exam. Publish anyway?')) return;
+
+      // Exactly the schema the Android app reads
+      const payload = {
+        title: m.title,
+        durationMinutes: m.duration,
+        deadlineTimestamp: m.deadline || 0,
+        bannerUrl: safeImgUrl(examDraft.bannerUrl),
+        bannerPath: examDraft.bannerUrl ? (examDraft.bannerPath || '') : '',
+        instructions: ($id('exam-instructions').value.trim() || getDefaultInstructions()),
+        questions: examDraft.questions.map((q, i) => ({
+          id: 'q' + (i + 1),
+          questionNumber: i + 1,
+          questionText: mathFix(q.questionText.trim()),
+          options: q.options.map(o => mathFix(o.trim())).slice(0, q.options[4].trim() ? 5 : 4),
+          correctIndex: q.correctIndex,
+          explanation: mathFix(q.explanation.trim())
+        }))
+      };
+
+      const btn = $id('exam-save-btn');
+      btn.disabled = true;
+      try {
+        if (examDraft.id) await db.collection('live_exams').doc(examDraft.id).set(payload, { merge: true });
+        else await db.collection('live_exams').add(payload);
+        toast(examDraft.id ? 'Exam updated.' : 'Exam published — students can see it now.', 'success');
+        examDraft.saved = true;
+        cleanupBannersAfterSave(examDraft);
+        closeExamEditor(true);
+      } catch (e) {
+        console.error('Save exam error:', e);
+        toast('Failed to save exam: ' + e.message, 'error', 6000);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function deleteExam(id) {
+      const e = rawExams.find(x => x.id === id);
+      if (!e) return;
+      const n = subsNorm.filter(s => s.examId === id).length;
+      const msg = `Delete "${e.title || 'this exam'}"?` +
+        (n ? `\n\nIts ${n} student submission${n === 1 ? '' : 's'} will stay in live_exam_submissions, but the exam disappears from the app.` : '') +
+        '\n\nThis cannot be undone.';
+      if (!confirm(msg)) return;
+      try {
+        await db.collection('live_exams').doc(id).delete();
+        if (e.bannerPath && !bannerInUseByOther(e.bannerPath, id)) deleteBannerFile(e.bannerPath);
+        toast('Exam deleted.', 'info');
+      } catch (err) {
+        toast('Failed to delete exam: ' + err.message, 'error', 6000);
+      }
+    }
+
+    // ── submissions ──
+    // Field names are read defensively because the app's exact submission schema may vary.
+    function normSub(s) {
+      const examId = String(s.examId || s.liveExamId || s.exam_id || '');
+      const exam = rawExams.find(e => e.id === examId);
+      const email = String(s.userEmail || s.email || '');
+      const name = String(s.userName || s.studentName || s.displayName || s.name || 'Student');
+      const score = num(s.score ?? s.finalScore ?? s.correctAnswers ?? s.correctCount ?? s.points);
+      const total = num(s.totalQuestions ?? s.total ?? s.questionCount) ?? (exam && Array.isArray(exam.questions) ? exam.questions.length : null);
+      let pen = s.penalty ?? s.penalties ?? s.penaltyCount ?? s.penaltyPoints ?? s.violations ?? 0;
+      if (Array.isArray(pen)) pen = pen.length;
+      pen = num(pen) || 0;
+      let tt = num(s.timeTakenSeconds ?? s.timeSpentSeconds ?? s.durationSeconds);
+      if (tt === null && num(s.timeTakenMs) !== null) tt = num(s.timeTakenMs) / 1000;
+      if (tt === null && num(s.timeTakenMinutes) !== null) tt = num(s.timeTakenMinutes) * 60;
+      const pct = (score !== null && total > 0) ? (score / total) * 100 : null;
+      return {
+        id: s.id, examId,
+        examTitle: exam ? (exam.title || 'Untitled exam') : (s.examTitle || (examId ? '(deleted exam)' : '—')),
+        name, email,
+        uid: String(s.userId || s.uid || s.studentId || email || name),
+        score, total, pct,
+        rankVal: pct !== null ? pct : (score !== null ? score : -1),
+        penalty: pen, timeTaken: tt,
+        submittedMs: getTimestampMs(s.submittedAt ?? s.submissionTime ?? s.submittedAtMs ?? s.timestamp ?? s.createdAt)
+      };
+    }
+
+    function rebuildExamFilter() {
+      const sel = $id('exam-filter');
+      const prev = sel.value;
+      sel.innerHTML = '<option value="ALL">All exams</option>' +
+        sortedExams().map(e => `<option value="${escX(e.id)}">${escX(e.title || 'Untitled exam')}</option>`).join('');
+      sel.value = [...sel.options].some(o => o.value === prev) ? prev : 'ALL';
+    }
+
+    function filteredSubs() {
+      const ex = $id('exam-filter').value;
+      return subsNorm.filter(s => ex === 'ALL' || s.examId === ex);
+    }
+
+    function pctBadge(p) {
+      if (p === null) return '';
+      const cls = p >= 70 ? 'badge-approved' : p >= 50 ? 'badge-pending' : 'badge-rejected';
+      return `<span class="badge ${cls} ml-1.5">${Math.round(p)}%</span>`;
+    }
+
+    function renderExamSubs() {
+      const tbody = $id('subs-tbody');
+      if (!tbody) return;
+      if (subsError) {
+        $id('sub-stats').innerHTML = '';
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-rose-500 font-semibold">Error reading live_exam_submissions: ${escX(subsError)}</td></tr>`;
+        return;
+      }
+      const q = $id('sub-search').value.toLowerCase().trim();
+      const sort = $id('sub-sort').value;
+      const list = filteredSubs().filter(s => !q || s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q));
+      const cmp = {
+        newest: (a, b) => b.submittedMs - a.submittedMs,
+        high: rankCmp,
+        low: (a, b) => rankCmp(b, a),
+        pen: (a, b) => b.penalty - a.penalty
+      }[sort];
+      list.sort(cmp);
+
+      // summary tiles
+      const withPct = list.filter(s => s.pct !== null);
+      const avg = withPct.length ? Math.round(withPct.reduce((a, s) => a + s.pct, 0) / withPct.length) + '%' : '—';
+      const best = withPct.length ? Math.round(Math.max(...withPct.map(s => s.pct))) + '%' : '—';
+      const penCount = list.filter(s => s.penalty > 0).length;
+      const tile = (label, value, cls) => `<div class="card p-3 sm:p-4"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">${label}</p><p class="text-xl sm:text-2xl font-display font-extrabold mt-1 ${cls}">${value}</p></div>`;
+      $id('sub-stats').innerHTML =
+        tile('Submissions', list.length, 'text-slate-900 dark:text-white') +
+        tile('Average score', avg, 'text-brand-600 dark:text-brand-400') +
+        tile('Highest score', best, 'text-emerald-600 dark:text-emerald-400') +
+        tile('With penalties', penCount, penCount ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white');
+
+      if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-14">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3"><i data-lucide="inbox" class="w-6 h-6"></i></div>
+          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">No submissions found.</p>
+          <p class="text-xs text-slate-400 mt-1">Student results appear here as soon as they finish a live exam.</p></td></tr>`;
+        lucide.createIcons();
+        return;
+      }
+
+      tbody.innerHTML = list.map(s => `
+        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
+          <td class="py-3 px-4">
+            <div class="flex items-center gap-3">
+              ${avatar(s.name)}
+              <div class="min-w-0">
+                <div class="font-bold text-slate-900 dark:text-white truncate">${escX(s.name)}</div>
+                ${s.email ? `<div class="text-xs text-slate-500 dark:text-slate-400 truncate">${escX(s.email)}</div>` : ''}
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-4 text-xs font-semibold text-slate-700 dark:text-slate-200 max-w-[14rem]"><div class="truncate">${escX(s.examTitle)}</div></td>
+          <td class="py-3 px-4 whitespace-nowrap">
+            <span class="font-display font-extrabold text-slate-900 dark:text-white">${fmtNum(s.score)}</span>${s.total !== null ? `<span class="text-[11px] font-bold text-slate-400"> / ${fmtNum(s.total)}</span>` : ''}${pctBadge(s.pct)}
+          </td>
+          <td class="py-3 px-4">${s.penalty > 0
+            ? `<span class="badge badge-rejected"><i data-lucide="alert-triangle" class="w-3 h-3"></i>${fmtNum(s.penalty)}</span>`
+            : `<span class="text-xs text-slate-400">None</span>`}</td>
+          <td class="py-3 px-4 font-mono text-xs font-semibold text-slate-600 dark:text-slate-300">${fmtClock(s.timeTaken)}</td>
+          <td class="py-3 px-4 text-xs text-slate-600 dark:text-slate-300 whitespace-nowrap">${s.submittedMs ? `${escX(fmtDateTime(s.submittedMs))}<div class="text-[11px] text-slate-400">${escX(timeAgo(s.submittedMs))}</div>` : '—'}</td>
+          <td class="py-3 px-4 text-right"><button class="btn-ghost !px-2" onclick="openSubRaw('${escX(s.id)}')" title="View raw data"><i data-lucide="braces" class="w-3.5 h-3.5"></i></button></td>
+        </tr>`).join('');
+      lucide.createIcons();
+    }
+
+    // ── Top 10 ──
+    function rankCmp(a, b) {
+      if (b.rankVal !== a.rankVal) return b.rankVal - a.rankVal;      // higher score first
+      if (a.penalty !== b.penalty) return a.penalty - b.penalty;      // fewer penalties
+      if (a.timeTaken !== null && b.timeTaken !== null && a.timeTaken !== b.timeTaken) return a.timeTaken - b.timeTaken; // faster
+      return (a.submittedMs || Number.MAX_SAFE_INTEGER) - (b.submittedMs || Number.MAX_SAFE_INTEGER); // earlier
+    }
+
+    // best attempt per student per exam, top 10
+    function topEntries() {
+      const best = new Map();
+      filteredSubs().forEach(s => {
+        const k = s.examId + '|' + s.uid;
+        const cur = best.get(k);
+        if (!cur || rankCmp(s, cur) < 0) best.set(k, s);
+      });
+      return [...best.values()].sort(rankCmp).slice(0, 10);
+    }
+
+    function renderTop10() {
+      const box = $id('top-list');
+      if (!box) return;
+      if (subsError) {
+        box.innerHTML = `<div class="text-center py-10 text-rose-500 text-sm font-semibold">Error reading live_exam_submissions: ${escX(subsError)}</div>`;
+        return;
+      }
+      const all = $id('exam-filter').value === 'ALL';
+      $id('top-sub').innerText = 'Best attempt per student · ranked by score, then fewer penalties, then faster time' + (all ? ' · all exams ranked by percentage' : '');
+      const top = topEntries();
+
+      if (!top.length) {
+        box.innerHTML = `<div class="text-center py-10">
+          <div class="mx-auto w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 mb-3"><i data-lucide="trophy" class="w-6 h-6"></i></div>
+          <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">No scores yet.</p>
+          <p class="text-xs text-slate-400 mt-1">The leaderboard fills up as students submit.</p></div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      const medal = ['🥇', '🥈', '🥉'];
+      const rankCls = [
+        'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300',
+        'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+        'bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300'
+      ];
+      const rowCls = [
+        'border-amber-300 dark:border-amber-500/40 bg-amber-50/60 dark:bg-amber-500/5',
+        'border-slate-300 dark:border-slate-600 bg-slate-50/60 dark:bg-slate-800/30',
+        'border-orange-300 dark:border-orange-500/40 bg-orange-50/50 dark:bg-orange-500/5'
+      ];
+
+      box.innerHTML = top.map((s, i) => `
+        <div class="flex items-center gap-3 rounded-2xl border p-3 sm:p-4 ${i < 3 ? rowCls[i] : 'border-slate-200 dark:border-slate-800'}">
+          <div class="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center font-display font-extrabold text-sm ${i < 3 ? rankCls[i] : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}">${i < 3 ? medal[i] : i + 1}</div>
+          ${avatar(s.name)}
+          <div class="min-w-0 flex-1">
+            <div class="font-bold text-slate-900 dark:text-white truncate">${escX(s.name)}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 truncate">${escX(all ? s.examTitle : (s.email || s.examTitle))}</div>
+          </div>
+          <div class="hidden sm:block text-right text-[11px] font-semibold text-slate-500 dark:text-slate-400 leading-relaxed">
+            <div>${s.penalty > 0 ? `<span class="text-rose-600 dark:text-rose-400">${fmtNum(s.penalty)} penalt${s.penalty === 1 ? 'y' : 'ies'}</span>` : 'No penalties'}</div>
+            <div class="font-mono">${fmtClock(s.timeTaken)}</div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="font-display font-extrabold text-slate-900 dark:text-white text-base sm:text-lg leading-none">${fmtNum(s.score)}${s.total !== null ? `<span class="text-[11px] font-bold text-slate-400"> / ${fmtNum(s.total)}</span>` : ''}</div>
+            ${s.pct !== null ? `<div class="text-[11px] font-bold text-brand-600 dark:text-brand-400 mt-1">${Math.round(s.pct)}%</div>` : ''}
+          </div>
+        </div>`).join('');
+      lucide.createIcons();
+    }
+
+    // ── exports + raw viewer ──
+    function exportSubmissionsCSV() {
+      const list = filteredSubs().sort((a, b) => b.submittedMs - a.submittedMs);
+      if (!list.length) return toast('No submissions to export.', 'error');
+      const rows = [['Exam', 'Student', 'Email', 'Score', 'Total', 'Percent', 'Penalties', 'Time taken', 'Submitted']];
+      list.forEach(s => rows.push([s.examTitle, s.name, s.email, fmtNum(s.score), fmtNum(s.total), s.pct === null ? '' : Math.round(s.pct) + '%', s.penalty, fmtClock(s.timeTaken), s.submittedMs ? new Date(s.submittedMs).toLocaleString() : '']));
+      downloadCSV(`ju-freshhub-exam-submissions-${stamp()}.csv`, rows);
+      toast(`Exported ${list.length} submissions.`, 'success');
+    }
+    function exportTopCSV() {
+      const top = topEntries();
+      if (!top.length) return toast('No scores to export.', 'error');
+      const rows = [['Rank', 'Student', 'Email', 'Exam', 'Score', 'Total', 'Percent', 'Penalties', 'Time taken']];
+      top.forEach((s, i) => rows.push([i + 1, s.name, s.email, s.examTitle, fmtNum(s.score), fmtNum(s.total), s.pct === null ? '' : Math.round(s.pct) + '%', s.penalty, fmtClock(s.timeTaken)]));
+      downloadCSV(`ju-freshhub-top10-${stamp()}.csv`, rows);
+      toast('Top 10 exported.', 'success');
+    }
+    function openSubRaw(id) {
+      const doc = rawSubs.find(s => s.id === id);
+      if (!doc) return;
+      $id('sub-raw-pre').textContent = JSON.stringify(doc, null, 2);
+      $id('sub-raw-modal').classList.remove('hidden');
+      lucide.createIcons();
+    }
+    function closeSubRaw() { $id('sub-raw-modal').classList.add('hidden'); }
+
+
+    function initUI() {
+      applyBranding();
+      syncThemeIcon();
+      syncMuteIcon();
+      updateGreeting();
+      setInterval(updateGreeting, 30000);
+      // Refresh "x min ago" labels once a minute
+      setInterval(() => { if (rawPayments.length) renderPayments(); if (rawUsers.length) renderStudents(); }, 60000);
+      let last = 'payments';
+      try { last = localStorage.getItem('ju_last_tab') || 'payments'; } catch (e) {}
+      if (!['payments', 'students', 'announcements', 'notifications', 'exams'].includes(last)) last = 'payments';
+      switchTab(last);
+      renderPaymentChips({}, 'PENDING_VERIFICATION');
+      lucide.createIcons();
+
+      // Keyboard shortcuts
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { closeScreenshotModal(); closeShortcuts(); closeSubRaw(); return; }
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (document.getElementById('app-container').classList.contains('hidden')) return;
+        const map = { '1': 'payments', '2': 'students', '3': 'announcements', '4': 'notifications', '5': 'exams' };
+        if (map[e.key]) { switchTab(map[e.key]); }
+        else if (e.key === '/') {
+          e.preventDefault();
+          const visible = !document.getElementById('view-payments').classList.contains('hidden') ? 'payment-search'
+                        : !document.getElementById('view-students').classList.contains('hidden') ? 'student-search' : null;
+          if (visible) document.getElementById(visible).focus();
+        }
+        else if (e.key === 'd' || e.key === 'D') toggleTheme();
+        else if (e.key === 'm' || e.key === 'M') toggleMute();
+        else if (e.key === '?') openShortcuts();
+      });
+    }
+  </script>
+</body>
+</html>
